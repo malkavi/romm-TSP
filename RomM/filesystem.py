@@ -15,7 +15,7 @@ class Filesystem:
     is_spruceos = os.path.exists("/mnt/SDCARD/spruce")
     
     # Check is app is running on TrimUI
-    is_trimui_stock = os.path.exists("/mnt/SDCARD/Roms") or (os.environ.get("CFW_NAME", "") == "TrimUI")
+    is_trimui_stock = os.path.exists("/mnt/SDCARD/Roms") or (os.getenv("CFW_NAME", "") == "TrimUI")
 
     # Storage paths for ROMs
     _sd1_roms_storage_path: str

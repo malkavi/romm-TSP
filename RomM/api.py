@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 
 import platform_maps
 from filesystem import Filesystem
-from models import Collection, Platform, Rom
+from models import Collection, Platform, Rom, Save, ScreenShot
 from PIL import Image
 from status import Status, View
 
@@ -22,6 +22,8 @@ class API:
     _collections_endpoint = "api/collections"
     _virtual_collections_endpoint = "api/collections/virtual"
     _roms_endpoint = "api/roms"
+    _saves_endpoint = "api/saves"
+    _states_endpoint = "api/states"
     _user_me_endpoint = "api/users/me"
     _user_profile_picture_url = "assets/romm/assets"
 
@@ -239,7 +241,7 @@ class API:
 
         # Get the list of subfolders in the ROMs directory for PM filtering
         roms_subfolders = set()
-        if not self.file_system.is_muos and not self.file_system.is_spruceos:
+        if not self.file_system.is_muos and not self.file_system.is_spruceos and not self.file_system.is_trimui_stock:
             roms_path = self.file_system.get_roms_storage_path()
             print(f"ROMs path: {roms_path}")
             if os.path.exists(roms_path):
@@ -268,6 +270,12 @@ class API:
                 elif self.file_system.is_spruceos:
                     if (
                         platform_slug not in platform_maps.SPRUCEOS_SUPPORTED_PLATFORMS
+                        or platform_slug in self._exclude_platforms
+                    ):
+                        continue
+                elif self.file_system.is_trimui_stock:
+                    if (
+                        platform_slug not in platform_maps.TRIMUI_STOCK_SUPPORTED_PLATFORMS
                         or platform_slug in self._exclude_platforms
                     ):
                         continue
@@ -447,7 +455,7 @@ class API:
 
         # Get the list of subfolders in the ROMs directory for non-muOS filtering
         roms_subfolders = set()
-        if not self.file_system.is_muos and not self.file_system.is_spruceos:
+        if not self.file_system.is_muos and not self.file_system.is_spruceos and not self.file_system.is_trimui_stock:
             roms_path = self.file_system.get_roms_storage_path()
             if os.path.exists(roms_path):
                 roms_subfolders = {
@@ -470,6 +478,9 @@ class API:
             elif self.file_system.is_spruceos:
                 if platform_slug not in platform_maps.SPRUCEOS_SUPPORTED_PLATFORMS:
                     continue
+            elif self.file_system.is_trimui_stock:
+                if platform_slug not in platform_maps.TRIMUI_STOCK_SUPPORTED_PLATFORMS:
+                    continue        
             else:
                 mapped_folder, icon_file = platform_maps.ES_FOLDER_MAP.get(
                     platform_slug.lower(), (platform_slug, platform_slug)
@@ -610,3 +621,134 @@ class API:
                 return
         # End of download
         self._reset_download_status(valid_host=True, valid_credentials=True)
+        
+    def fetch_saves_states(self) -> None:
+        endpoint = self._saves_endpoint
+        fetch_type = "saves"
+        if self.status.selected_states_get:
+            endpoint = self._states_endpoint
+            fetch_type = "states"
+            
+            
+        print(f"Fetching {fetch_type}...")
+        try:
+            request = Request(
+                f"{self.host}/{endpoint}", headers=self.headers
+            )
+        except ValueError:
+            self.status.saves = []
+            self.status.valid_host = False
+            self.status.valid_credentials = False
+            return
+        print(f"Requesting {fetch_type} from {self.host}/{endpoint} / {self.headers}")
+        try:
+            if request.type not in ("http", "https"):
+                self.status.saves = []
+                self.status.valid_host = False
+                self.status.valid_credentials = False
+                return
+            response = urlopen(request, timeout=60)  # trunk-ignore(bandit/B310)
+        except HTTPError as e:
+            if e.code == 403:
+                self.status.saves = []
+                self.status.valid_host = True
+                self.status.valid_credentials = False
+                return
+            else:
+                raise
+        except URLError:
+            self.status.saves = []
+            self.status.valid_host = False
+            self.status.valid_credentials = False
+            return
+        saves = json.loads(response.read().decode("utf-8"))
+        # print(f"Saves: {saves}")
+        _saves: list[Save] = []
+
+        for save in saves:
+            save_params = {
+                "id": save["id"],
+                "rom_id": save["rom_id"],
+                "user_id": save["user_id"],
+                "file_name": save["file_name"],
+                "file_name_no_tags": save["file_name_no_tags"], 
+                "file_name_no_ext": save["file_name_no_ext"], 
+                "file_extension": save["file_extension"],
+                "file_path": save["file_path"],
+                "file_size_bytes": save["file_size_bytes"],
+                "full_path": save["full_path"],
+                "download_path": save["download_path"],
+                "created_at": save["created_at"],
+                "updated_at": save["updated_at"], 
+                "emulator": save["emulator"],
+                "screenshot": None  # Default to None
+            }
+            
+            if "screenshot" in save and save["screenshot"]:
+                save_params["screenshot"] = ScreenShot(
+                    id=save["screenshot"]["id"],
+                    rom_id=save["screenshot"]["rom_id"],
+                    user_id=save["screenshot"]["user_id"],
+                    file_name=save["screenshot"]["file_name"],
+                    file_name_no_tags=save["screenshot"]["file_name_no_tags"],
+                    file_name_no_ext=save["screenshot"]["file_name_no_ext"],
+                    file_extension=save["screenshot"]["file_extension"],
+                    file_path=save["screenshot"]["file_path"],
+                    file_size_bytes=save["screenshot"]["file_size_bytes"],
+                    full_path=save["screenshot"]["full_path"],
+                    download_path=save["screenshot"]["download_path"],
+                    created_at=save["screenshot"]["created_at"],
+                    updated_at=save["screenshot"]["updated_at"],
+                )
+            
+            _saves.append(Save(**save_params))
+
+            # self.file_system.resources_path = os.getcwd() + "/resources"
+            # icon_path = f"{self.file_system.resources_path}/{platform['slug']}.ico"
+            # if not os.path.exists(icon_path):
+            #     self._fetch_platform_icon(platform["slug"])
+
+        self.status.saves = _saves
+        self.status.valid_host = True
+        self.status.valid_credentials = True
+        self.status.platforms_ready.set()
+
+    def fetch_states(self) -> None:
+        print("Fetching states...")
+        try:
+            request = Request(
+                f"{self.host}/{self._states_endpoint}", headers=self.headers
+            )
+        except ValueError:
+            self.status.saves = []
+            self.status.valid_host = False
+            self.status.valid_credentials = False
+            print("Invalid request for states")
+            return
+        print(f"Requesting states from {self.host}/{self._states_endpoint} / {self.headers}")
+        try:
+            if request.type not in ("http", "https"):
+                self.status.saves = []
+                self.status.valid_host = False
+                self.status.valid_credentials = False
+                return
+            response = urlopen(request, timeout=60)  # trunk-ignore(bandit/B310)
+        except HTTPError as e:
+            print(f"HTTP Error in fetching states: {e}")
+            if e.code == 403:
+                self.status.saves = []
+                self.status.valid_host = True
+                self.status.valid_credentials = False
+                return
+            else:
+                raise
+        except URLError:
+            print("URLError in fetching states")
+            self.status.saves = []
+            self.status.valid_host = False
+            self.status.valid_credentials = False
+            return
+        states = json.loads(response.read().decode("utf-8"))
+        print(f"Fetched {len(states)} saves")
+        print(f"States: {states}")
+        _saves: list[Save] = []

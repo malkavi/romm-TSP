@@ -2,7 +2,7 @@ import itertools
 import threading
 from typing import Optional
 
-from models import Collection, Platform, Rom
+from models import Collection, Platform, Rom, Save
 
 
 class View:
@@ -38,6 +38,9 @@ class Status:
         self.selected_collection: Optional[Collection] = None
         self.selected_virtual_collection: Optional[Collection] = None
 
+        self.selected_user_id = 1
+        self.selected_states_get = False
+
         self.show_start_menu = False
         self.show_contextual_menu = False
 
@@ -47,11 +50,13 @@ class Status:
         self.roms_to_show: list[Rom] = []
         self.filters = itertools.cycle([Filter.ALL, Filter.LOCAL, Filter.REMOTE])
         self.current_filter = next(self.filters)
+        self.saves: list[Save] = []
 
         self.platforms_ready = threading.Event()
         self.collections_ready = threading.Event()
         self.roms_ready = threading.Event()
         self.download_rom_ready = threading.Event()
+        self.saves_ready = threading.Event()
         self.abort_download = threading.Event()
         self.me_ready = threading.Event()
         self.updating = threading.Event()

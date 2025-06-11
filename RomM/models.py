@@ -19,3 +19,39 @@ Rom = namedtuple(
 )
 Collection = namedtuple("Collection", ["id", "name", "rom_count", "virtual"])
 Platform = namedtuple("Platform", ["id", "display_name", "slug", "rom_count"])
+Save = namedtuple(
+    "Saves", 
+    [
+        "id",
+        "rom_id",
+        "user_id",
+        "file_name",
+        "file_name_no_tags",
+        "file_name_no_ext",
+        "file_extension",
+        "file_path",
+        "file_size_bytes",
+        "full_path",
+        "download_path",
+        "created_at",
+        "updated_at",
+        "emulator",
+        "screenshot",
+    ])
+ScreenShot = namedtuple(
+    "screenshot",
+    [
+        "id",
+        "rom_id",
+        "user_id",
+        "file_name",
+        "file_name_no_tags",
+        "file_name_no_ext",
+        "file_extension",
+        "file_path",
+        "file_size_bytes",
+        "full_path",
+        "download_path",
+        "created_at",
+        "updated_at",
+    ]) 
