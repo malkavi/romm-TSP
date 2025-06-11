@@ -13,6 +13,9 @@ class Filesystem:
 
     # Check is app is running on SpruceOS
     is_spruceos = os.path.exists("/mnt/SDCARD/spruce")
+    
+    # Check is app is running on TrimUI
+    is_trimui_stock = os.path.exists("/mnt/SDCARD/Roms") or (os.environ.get("CFW_NAME", "") == "TrimUI")
 
     # Storage paths for ROMs
     _sd1_roms_storage_path: str
@@ -38,6 +41,9 @@ class Filesystem:
         elif self.is_spruceos:
             self._sd1_roms_storage_path = "/mnt/SDCARD/Roms"
             self._sd2_roms_storage_path = None
+        elif self.is_trimui_stock:
+            self._sd1_roms_storage_path = "/mnt/SDCARD/Roms"
+            self._sd2_roms_storage_path = None    
         else:
             # Go up two levels from the script's directory (e.g., from roms/ports/romm to roms/)
             base_path = os.path.abspath(os.path.join(os.getcwd(), "..", ".."))
@@ -75,6 +81,7 @@ class Filesystem:
         Return the platform-specific storage path,
         using MUOS mapping if on muOS,
         or SpruceOS mapping if on SpruceOS,
+        or TrimUI mapping if on TrimUI,
         or using ES mapping if available.
         """
 
@@ -93,6 +100,11 @@ class Filesystem:
 
         if self.is_spruceos:
             platform_dir = platform_maps.SPRUCEOS_SUPPORTED_PLATFORMS_FS_MAP.get(
+                platform, platform_dir
+            )
+        
+        if self.is_trimui_stock:
+            platform_dir = platform_maps.TRIMUI_STOCK_SUPPORTED_PLATFORMS_FS_MAP.get(
                 platform, platform_dir
             )
 
