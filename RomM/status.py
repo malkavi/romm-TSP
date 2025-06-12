@@ -63,6 +63,7 @@ class Status:
 
         # Initialize events what won't launch at startup
         self.roms_ready.set()
+        self.saves_ready.set()
         self.download_rom_ready.set()
         self.abort_download.set()
 
@@ -74,6 +75,10 @@ class Status:
         self.downloaded_percent = 0.0
         self.extracting_rom = False
         self.extracted_percent = 0.0
+
+        self.download_queue_saves: list[Save] = []
+        self.downloading_save: Optional[Save] = None
+        self.downloading_save_position = 0
 
     def reset_roms_list(self) -> None:
         self.roms = []

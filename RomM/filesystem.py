@@ -2,7 +2,7 @@ import os
 from typing import Optional
 
 import platform_maps
-from models import Rom
+from models import Rom, Save
 
 
 class Filesystem:
@@ -21,6 +21,12 @@ class Filesystem:
     _sd1_roms_storage_path: str
     _sd2_roms_storage_path: str | None
 
+    # Storage paths for SAVEs
+    _saves_storage_path: str | None
+
+    # Storage paths for STATEs
+    _states_storage_path: str | None
+
     # Resources path: Use current working directory + "resources"
     resources_path = os.path.join(os.getcwd(), "resources")
 
@@ -35,21 +41,26 @@ class Filesystem:
             os.makedirs(self.resources_path, exist_ok=True)
 
         # ROMs storage path
-        if self.is_muos:
-            self._sd1_roms_storage_path = "/mnt/mmc/ROMS"
-            self._sd2_roms_storage_path = "/mnt/sdcard/ROMS"
-        elif self.is_spruceos:
-            self._sd1_roms_storage_path = "/mnt/SDCARD/Roms"
+        if os.environ.get("ROMS_STORAGE_PATH", "") != "":
+            # if the environment variable is set, use it
+            self._sd1_roms_storage_path = os.environ["ROMS_STORAGE_PATH"]
             self._sd2_roms_storage_path = None
-        elif self.is_trimui_stock:
-            self._sd1_roms_storage_path = "/mnt/SDCARD/Roms"
-            self._sd2_roms_storage_path = None    
         else:
-            # Go up two levels from the script's directory (e.g., from roms/ports/romm to roms/)
-            base_path = os.path.abspath(os.path.join(os.getcwd(), "..", ".."))
-            # Default to the ROMs directory, overridable via environment variable
-            self._sd1_roms_storage_path = os.environ.get("ROMS_STORAGE_PATH", base_path)
-            self._sd2_roms_storage_path = None
+            if self.is_muos:
+                self._sd1_roms_storage_path = "/mnt/mmc/ROMS"
+                self._sd2_roms_storage_path = "/mnt/sdcard/ROMS"
+            elif self.is_spruceos:
+                self._sd1_roms_storage_path = "/mnt/SDCARD/Roms"
+                self._sd2_roms_storage_path = None
+            elif self.is_trimui_stock:
+                self._sd1_roms_storage_path = "/mnt/SDCARD/Roms"
+                self._sd2_roms_storage_path = None    
+            else:
+                # Go up two levels from the script's directory (e.g., from roms/ports/romm to roms/)
+                base_path = os.path.abspath(os.path.join(os.getcwd(), "..", ".."))
+                # Default to the ROMs directory, overridable via environment variable
+                self._sd1_roms_storage_path = os.environ.get("ROMS_STORAGE_PATH", base_path)
+                self._sd2_roms_storage_path = None
 
         # Ensure the ROMs storage path exists
         if self._sd2_roms_storage_path and not os.path.exists(
@@ -64,6 +75,16 @@ class Filesystem:
                 1 if os.path.exists(self._sd1_roms_storage_path) else 2,
             )
         )
+
+        # SAVEs storage path
+        self._saves_storage_path = os.environ.get("SAVES_STORAGE_PATH", None)
+        # SAVEs storage folder
+        self._saves_storage_folder = int(os.environ.get("SAVES_STORAGE_FOLDER", 0))
+
+        # STATEs storage path
+        self._states_storage_path = os.environ.get("STATES_STORAGE_PATH", None)
+        # SAVEs storage folder
+        self._states_storage_folder = int(os.environ.get("STATES_STORAGE_FOLDER", 0))
 
     ###
     # PRIVATE METHODS
@@ -123,6 +144,36 @@ class Filesystem:
             return os.path.join(self._sd2_roms_storage_path, platforms_dir)
         return None
 
+    def _get_saves_storage_path(self, platform: str, emulator: str) -> str:
+        saves_dir = ""
+        saves_path = self._saves_storage_path
+        # 0: Directly in the path
+        if self._saves_storage_folder == 1:
+            # 1: Use Core name subfolder
+            saves_dir = emulator
+        elif self._saves_storage_folder == 2:
+            # 2: Use platform name subfolder (Knulli)
+            saves_dir = self._get_platform_storage_dir_from_mapping(platform)
+        elif self._saves_storage_folder == 3:
+            # 3: Use content path (with the rom, ignore saves path)
+            saves_path = self._sd1_roms_storage_path
+        return os.path.join(saves_path, saves_dir)
+    
+    def _get_states_storage_path(self, platform: str, emulator: str) -> str:
+        states_dir = ""
+        states_path = self._states_storage_path
+        # 0: Directly in the path
+        if self._states_storage_folder == 1:
+            # 1: Use Core name subfolder
+            states_dir = emulator
+        elif self._states_storage_folder == 2:
+            # 2: Use platform name subfolder (Knulli)
+            states_dir = self._get_platform_storage_dir_from_mapping(platform)
+        elif self._states_storage_folder == 3:
+            # 3: Use content path (with the rom, ignore states path)
+            states_path = self._sd1_roms_storage_path
+        return os.path.join(states_path, states_dir)
+
     ###
     # PUBLIC METHODS
     ###
@@ -157,3 +208,11 @@ class Filesystem:
             rom.fs_name if not rom.multi else f"{rom.fs_name}.m3u",
         )
         return os.path.exists(rom_path)
+    
+    def get_saves_states_storage_path(self, sel_state, platform: str, emulator: str) -> str:
+        """Return the storage path for a specific save/state."""
+        if sel_state:
+            # Save state path
+            return self._get_states_storage_path(platform, emulator)
+        # Save path
+        return self._get_saves_storage_path(platform, emulator)

@@ -114,6 +114,54 @@ class API:
         self.status.valid_host = True
         self.status.valid_credentials = True
 
+    def _fetch_rom_info(self, rom_id: int) -> Rom:
+        try:
+            request = Request(
+                f"{self.host}/{self._roms_endpoint}/{rom_id}",
+                headers=self.headers,
+            )
+        except ValueError as e:
+            print(e)
+            self.status.valid_host = False
+            self.status.valid_credentials = False
+            return
+        try:
+            if request.type not in ("http", "https"):
+                self.status.valid_host = False
+                self.status.valid_credentials = False
+                return
+            response = urlopen(request, timeout=60)  # trunk-ignore(bandit/B310)
+        except HTTPError as e:
+            print(e)
+            if e.code == 403:
+                self.status.valid_host = True
+                self.status.valid_credentials = False
+                return
+            else:
+                raise
+        except URLError as e:
+            print(e)
+            self.status.valid_host = False
+            self.status.valid_credentials = False
+            return
+        # TODO: 
+        rom = json.loads(response.read().decode("utf-8"))
+        _rom = Rom(
+                id=rom["id"],
+                name=rom["name"],
+                fs_name=rom["fs_name"],
+                platform_slug=rom["platform_slug"],
+                fs_extension=rom["fs_extension"],
+                fs_size=self._human_readable_size(rom["fs_size_bytes"]),
+                fs_size_bytes=rom["fs_size_bytes"],
+                multi=rom["multi"],
+                languages=rom["languages"],
+                regions=rom["regions"],
+                revision=rom["revision"],
+                tags=rom["tags"],
+            )
+        return _rom
+
     def fetch_me(self) -> None:
         try:
             request = Request(
@@ -523,6 +571,7 @@ class API:
         self.status.multi_selected_roms = []
         self.status.download_queue = []
         self.status.download_rom_ready.set()
+        self.status.saves_ready.set()
         self.status.abort_download.set()
 
     def download_rom(self) -> None:
@@ -713,42 +762,69 @@ class API:
         self.status.valid_credentials = True
         self.status.platforms_ready.set()
 
-    def fetch_states(self) -> None:
-        print("Fetching states...")
-        try:
-            request = Request(
-                f"{self.host}/{self._states_endpoint}", headers=self.headers
+    def download_save_state(self) -> None:
+        self.status.download_queue_saves.sort(key=lambda save: save.file_name)
+        for i, save in enumerate(self.status.download_queue_saves):
+            _rom = self._fetch_rom_info(save.rom_id)
+            if not _rom:
+                print(f"ERROR: ROM with ID {save.rom_id} not found.")
+                continue
+            self.status.downloading_save = save
+            self.status.downloading_save_position = i + 1
+            dest_path = os.path.join(
+                self.file_system.get_saves_states_storage_path(self.status.selected_states_get, _rom.platform_slug, save.emulator),
+                self._sanitize_filename(os.path.splitext(os.path.basename(_rom.fs_name))[0]) + '.' + save.file_extension
             )
-        except ValueError:
-            self.status.saves = []
-            self.status.valid_host = False
-            self.status.valid_credentials = False
-            print("Invalid request for states")
-            return
-        print(f"Requesting states from {self.host}/{self._states_endpoint} / {self.headers}")
-        try:
-            if request.type not in ("http", "https"):
-                self.status.saves = []
-                self.status.valid_host = False
-                self.status.valid_credentials = False
+            
+            url_dlpath = save.download_path.replace('\'', '')
+            url = f"{self.host}{quote(url_dlpath, safe='/?=[]:')}"
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+
+            try:
+                print(f"Fetching: {url}")
+                request = Request(url, headers=self.headers)
+            except ValueError:
+                self._reset_download_status()
                 return
-            response = urlopen(request, timeout=60)  # trunk-ignore(bandit/B310)
-        except HTTPError as e:
-            print(f"HTTP Error in fetching states: {e}")
-            if e.code == 403:
-                self.status.saves = []
-                self.status.valid_host = True
-                self.status.valid_credentials = False
+            try:
+                if request.type not in ("http", "https"):
+                    self._reset_download_status()
+                    return
+                print(f"Downloading {save.file_name} to {dest_path}")
+                with (
+                    urlopen(request) as response,  # trunk-ignore(bandit/B310)
+                    open(dest_path, "wb") as out_file,
+                ):
+                    self.status.total_downloaded_bytes = 0
+                    chunk_size = 1024
+                    while True:
+                        if not self.status.abort_download.is_set():
+                            chunk = response.read(chunk_size)
+                            if not chunk:
+                                print("Finalized download")
+                                break
+                            out_file.write(chunk)
+                            self.status.valid_host = True
+                            self.status.valid_credentials = True
+                            self.status.total_downloaded_bytes += len(chunk)
+                            self.status.downloaded_percent = (
+                                self.status.total_downloaded_bytes
+                                / (
+                                    self.status.downloading_save.file_size_bytes + 1
+                                )  # Add 1 virtual byte to avoid division by zero
+                            ) * 100
+                        else:
+                            self._reset_download_status(True, True)
+                            os.remove(dest_path)
+                            return
+            except HTTPError as e:
+                if e.code == 403:
+                    self._reset_download_status(valid_host=True)
+                    return
+                else:
+                    raise
+            except URLError:
+                self._reset_download_status(valid_host=True)
                 return
-            else:
-                raise
-        except URLError:
-            print("URLError in fetching states")
-            self.status.saves = []
-            self.status.valid_host = False
-            self.status.valid_credentials = False
-            return
-        states = json.loads(response.read().decode("utf-8"))
-        print(f"Fetched {len(states)} saves")
-        print(f"States: {states}")
-        _saves: list[Save] = []
+        # End of download
+        self._reset_download_status(valid_host=True, valid_credentials=True)
