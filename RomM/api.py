@@ -144,7 +144,7 @@ class API:
             self.status.valid_host = False
             self.status.valid_credentials = False
             return
-        # TODO: 
+        
         rom = json.loads(response.read().decode("utf-8"))
         _rom = Rom(
                 id=rom["id"],
@@ -160,7 +160,53 @@ class API:
                 revision=rom["revision"],
                 tags=rom["tags"],
             )
-        return _rom
+        _saves = self._parse_saves_states(rom["user_saves"])
+        _states = self._parse_saves_states(rom["user_states"])
+        return _rom, _saves, _states
+    
+    def _parse_saves_states(self, saves) -> None:
+        _saves: list[Save] = []
+
+        for save in saves:
+            save_params = {
+                "id": save["id"],
+                "rom_id": save["rom_id"],
+                "user_id": save["user_id"],
+                "file_name": save["file_name"],
+                "file_name_no_tags": save["file_name_no_tags"], 
+                "file_name_no_ext": save["file_name_no_ext"], 
+                "file_extension": save["file_extension"],
+                "file_path": save["file_path"],
+                "file_size_bytes": save["file_size_bytes"],
+                "full_path": save["full_path"],
+                "download_path": save["download_path"],
+                "created_at": save["created_at"],
+                "updated_at": save["updated_at"], 
+                "emulator": save["emulator"],
+                "screenshot": None  # Default to None
+            }
+            
+            if "screenshot" in save and save["screenshot"]:
+                save_params["screenshot"] = ScreenShot(
+                    id=save["screenshot"]["id"],
+                    rom_id=save["screenshot"]["rom_id"],
+                    user_id=save["screenshot"]["user_id"],
+                    file_name=save["screenshot"]["file_name"],
+                    file_name_no_tags=save["screenshot"]["file_name_no_tags"],
+                    file_name_no_ext=save["screenshot"]["file_name_no_ext"],
+                    file_extension=save["screenshot"]["file_extension"],
+                    file_path=save["screenshot"]["file_path"],
+                    file_size_bytes=save["screenshot"]["file_size_bytes"],
+                    full_path=save["screenshot"]["full_path"],
+                    download_path=save["screenshot"]["download_path"],
+                    created_at=save["screenshot"]["created_at"],
+                    updated_at=save["screenshot"]["updated_at"],
+                )
+            
+            _saves.append(Save(**save_params))
+        return _saves
+
+    # Public methods
 
     def fetch_me(self) -> None:
         try:
@@ -711,51 +757,8 @@ class API:
             self.status.valid_credentials = False
             return
         saves = json.loads(response.read().decode("utf-8"))
-        # print(f"Saves: {saves}")
-        _saves: list[Save] = []
-
-        for save in saves:
-            save_params = {
-                "id": save["id"],
-                "rom_id": save["rom_id"],
-                "user_id": save["user_id"],
-                "file_name": save["file_name"],
-                "file_name_no_tags": save["file_name_no_tags"], 
-                "file_name_no_ext": save["file_name_no_ext"], 
-                "file_extension": save["file_extension"],
-                "file_path": save["file_path"],
-                "file_size_bytes": save["file_size_bytes"],
-                "full_path": save["full_path"],
-                "download_path": save["download_path"],
-                "created_at": save["created_at"],
-                "updated_at": save["updated_at"], 
-                "emulator": save["emulator"],
-                "screenshot": None  # Default to None
-            }
-            
-            if "screenshot" in save and save["screenshot"]:
-                save_params["screenshot"] = ScreenShot(
-                    id=save["screenshot"]["id"],
-                    rom_id=save["screenshot"]["rom_id"],
-                    user_id=save["screenshot"]["user_id"],
-                    file_name=save["screenshot"]["file_name"],
-                    file_name_no_tags=save["screenshot"]["file_name_no_tags"],
-                    file_name_no_ext=save["screenshot"]["file_name_no_ext"],
-                    file_extension=save["screenshot"]["file_extension"],
-                    file_path=save["screenshot"]["file_path"],
-                    file_size_bytes=save["screenshot"]["file_size_bytes"],
-                    full_path=save["screenshot"]["full_path"],
-                    download_path=save["screenshot"]["download_path"],
-                    created_at=save["screenshot"]["created_at"],
-                    updated_at=save["screenshot"]["updated_at"],
-                )
-            
-            _saves.append(Save(**save_params))
-
-            # self.file_system.resources_path = os.getcwd() + "/resources"
-            # icon_path = f"{self.file_system.resources_path}/{platform['slug']}.ico"
-            # if not os.path.exists(icon_path):
-            #     self._fetch_platform_icon(platform["slug"])
+        
+        _saves = self._parse_saves_states(saves)
 
         self.status.saves = _saves
         self.status.valid_host = True
