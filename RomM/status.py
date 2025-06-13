@@ -10,6 +10,7 @@ class View:
     COLLECTIONS = "collection"
     VIRTUAL_COLLECTIONS = "virtual_collection"
     ROMS = "roms"
+    ROM_INFO = "rom_info"
 
 
 class Filter:
@@ -37,6 +38,7 @@ class Status:
         self.selected_platform: Optional[Platform] = None
         self.selected_collection: Optional[Collection] = None
         self.selected_virtual_collection: Optional[Collection] = None
+        self.selected_rom: Optional[Rom] = None
 
         self.selected_user_id = 1
         self.selected_states_get = False
@@ -51,12 +53,15 @@ class Status:
         self.filters = itertools.cycle([Filter.ALL, Filter.LOCAL, Filter.REMOTE])
         self.current_filter = next(self.filters)
         self.saves: list[Save] = []
+        self.states: list[Save] = []
+        self.saves_states_to_show: list[Save] = []
 
         self.platforms_ready = threading.Event()
         self.collections_ready = threading.Event()
         self.roms_ready = threading.Event()
         self.download_rom_ready = threading.Event()
         self.saves_ready = threading.Event()
+        self.rom_info_ready = threading.Event()
         self.abort_download = threading.Event()
         self.me_ready = threading.Event()
         self.updating = threading.Event()
@@ -64,6 +69,7 @@ class Status:
         # Initialize events what won't launch at startup
         self.roms_ready.set()
         self.saves_ready.set()
+        self.rom_info_ready.set()
         self.download_rom_ready.set()
         self.abort_download.set()
 

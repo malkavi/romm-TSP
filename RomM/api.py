@@ -114,7 +114,7 @@ class API:
         self.status.valid_host = True
         self.status.valid_credentials = True
 
-    def _fetch_rom_info(self, rom_id: int) -> Rom:
+    def fetch_rom_info(self, rom_id: int) -> Rom:
         try:
             request = Request(
                 f"{self.host}/{self._roms_endpoint}/{rom_id}",
@@ -162,7 +162,10 @@ class API:
             )
         _saves = self._parse_saves_states(rom["user_saves"])
         _states = self._parse_saves_states(rom["user_states"])
-        return _rom, _saves, _states
+        self.status.saves = _saves
+        self.status.states = _states
+        self.status.selected_rom = _rom
+        self.status.rom_info_ready.set()
     
     def _parse_saves_states(self, saves) -> None:
         _saves: list[Save] = []
@@ -763,12 +766,12 @@ class API:
         self.status.saves = _saves
         self.status.valid_host = True
         self.status.valid_credentials = True
-        self.status.platforms_ready.set()
+        self.status.saves_ready.set()
 
     def download_save_state(self) -> None:
         self.status.download_queue_saves.sort(key=lambda save: save.file_name)
         for i, save in enumerate(self.status.download_queue_saves):
-            _rom = self._fetch_rom_info(save.rom_id)
+            _rom = self.fetch_rom_info(save.rom_id)
             if not _rom:
                 print(f"ERROR: ROM with ID {save.rom_id} not found.")
                 continue

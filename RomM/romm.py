@@ -613,6 +613,13 @@ class RomM:
                             lambda: self._remove_rom_files(selected_rom),
                         ),
                     )
+                    self.contextual_menu_options.append(
+                        (
+                            f"{glyphs.delete} Show saves/states",
+                            1,
+                            lambda: self._render_rom_info(selected_rom),
+                        ),
+                    )
             else:
                 self.contextual_menu_options = []
         else:
@@ -746,6 +753,8 @@ class RomM:
                     self._render_collections_view()
                 elif self.status.current_view == View.ROMS:
                     self._render_roms_view()
+                elif self.status.current_view == View.ROM_INFO:
+                    self._render_rom_info_view()
                 else:
                     self._render_platforms_view()
                 self.ui.render_to_screen()
@@ -777,6 +786,7 @@ class RomM:
                 self.input.check_event(event)
                 if event.type == sdl2.SDL_QUIT:
                     self.running = False
+            sdl2.SDL_Delay(1)
 
     def start(self):
         self._render_platforms_view()
@@ -855,6 +865,13 @@ class RomM:
                     and not self.status.show_contextual_menu
                 ):
                     self._update_roms_view()
+            elif self.status.current_view == View.ROM_INFO:
+                self._render_rom_info_view()
+                if (
+                    not self.status.show_start_menu
+                    and not self.status.show_contextual_menu
+                ):
+                    self._update_rom_info_view()
             else:
                 self._render_platforms_view()
                 if (
@@ -895,3 +912,226 @@ class RomM:
                 [storage_path, full_path]
             ) == storage_path and os.path.isfile(full_path):
                 os.remove(full_path)
+
+    def _render_rom_info(self, rom: Rom):
+        self.status.rom_info_ready.clear()
+        self.status.roms = []
+        self.status.selected_rom = rom
+        self.status.current_view = View.ROM_INFO
+        threading.Thread(target=self.api.fetch_rom_info(rom.id)).start()
+        # self.api.fetch_rom_info(rom.id)
+
+        pass
+
+    def _render_rom_info_view(self):
+        if self.status.selected_rom is None and self.status.rom_info_ready.is_set():
+            header_text = "No ROM selected"
+            header_color = self.controller_layout["a"]["color"]
+        else:
+            header_text = "ROM Info: " + self.status.selected_rom.name
+            header_color = self.controller_layout["a"]["color"]
+            prepend_platform_slug = False
+
+        total_pages = (
+            len(self.status.saves_states_to_show) + self.max_n_roms - 1
+        ) // self.max_n_roms
+        current_page = (self.roms_selected_position // self.max_n_roms) + 1
+        header_text += f" [{current_page if total_pages > 0 else 0}/{total_pages}]"
+
+        if len(self.status.multi_selected_roms) > 0:
+            header_text += f" ({len(self.status.multi_selected_roms)} selected)"
+        if self.status.current_filter == Filter.ALL:
+            self.status.saves_states_to_show = self.status.saves + self.status.states
+        elif self.status.current_filter == Filter.LOCAL:
+            self.status.saves_states_to_show = [
+                r for r in (self.status.saves + self.status.states) if self.fs.is_rom_in_device(r)
+            ]
+        elif self.status.current_filter == Filter.REMOTE:
+            self.status.saves_states_to_show = [
+                r for r in (self.status.saves + self.status.states) if not self.fs.is_rom_in_device(r)
+            ]
+
+        self.ui.draw_rom_info_list(
+            self.roms_selected_position,
+            self.max_n_roms,
+            self.status.saves_states_to_show,
+            header_text,
+            header_color,
+            self.status.multi_selected_roms,
+            prepend_platform_slug=prepend_platform_slug,
+        )
+
+        if not self.status.rom_info_ready.is_set():
+            current_time = time.time()
+            if current_time - self.last_spinner_update >= self.spinner_speed:
+                self.last_spinner_update = current_time
+                self.current_spinner_status = next(glyphs.spinner)
+            self.ui.draw_log(text_line_1=f"{self.current_spinner_status} Fetching roms")
+        elif not self.status.download_rom_ready.is_set():
+            if self.status.extracting_rom and self.status.downloading_rom:
+                self.ui.draw_loader(
+                    self.status.extracted_percent,
+                    color=self.controller_layout["b"]["color"],
+                )
+                self.ui.draw_log(
+                    text_line_1=f"{self.status.downloading_rom_position}/{len(self.status.download_queue)} | {self.status.extracted_percent:.2f}% | Extracting {self.status.downloading_rom.name}",
+                    text_line_2=f"({self.status.downloading_rom.fs_name})",
+                    background=False,
+                )
+            elif self.status.downloading_rom:
+                self.ui.draw_loader(self.status.downloaded_percent)
+                self.ui.draw_log(
+                    text_line_1=f"{self.status.downloading_rom_position}/{len(self.status.download_queue)} | {self.status.downloaded_percent:.2f}% | {glyphs.download} {self.status.downloading_rom.name}",
+                    text_line_2=f"({self.status.downloading_rom.fs_name})",
+                    background=False,
+                )
+        elif not self.status.valid_host:
+            self.ui.draw_log(
+                text_line_1=f"Error: Can't connect to host {self.api.host}",
+                text_color=self.controller_layout["a"]["color"],
+            )
+            self.status.valid_host = True
+        elif not self.status.valid_credentials:
+            self.ui.draw_log(
+                text_line_1="Error: Permission denied",
+                text_color=self.controller_layout["a"]["color"],
+            )
+            self.status.valid_credentials = True
+        else:
+            self.buttons_config = [
+                {
+                    "key": self.controller_layout["a"]["btn"],
+                    "label": "Download",
+                    "color": self.controller_layout["a"]["color"],
+                },
+                {
+                    "key": self.controller_layout["b"]["btn"],
+                    "label": "Back",
+                    "color": self.controller_layout["b"]["color"],
+                },
+                {
+                    "key": self.controller_layout["y"]["btn"],
+                    "label": "Refresh",
+                    "color": self.controller_layout["y"]["color"],
+                },
+                {
+                    "key": self.controller_layout["x"]["btn"],
+                    "label": f"Filter:{self.status.current_filter}",
+                    "color": self.controller_layout["x"]["color"],
+                },
+                {
+                    "key": self.controller_layout["l1"]["btn"],
+                    "label": (
+                        "Deselect rom"
+                        if (
+                            len(self.status.roms_to_show) > 0
+                            and self.status.roms_to_show[self.roms_selected_position]
+                            in self.status.multi_selected_roms
+                        )
+                        else "Select rom"
+                    ),
+                    "color": self.controller_layout["l1"]["color"],
+                },
+                {
+                    "key": self.controller_layout["r1"]["btn"],
+                    "label": (
+                        "Deselect all"
+                        if len(self.status.multi_selected_roms)
+                        == len(self.status.roms_to_show)
+                        else "Select all"
+                    ),
+                    "color": self.controller_layout["r1"]["color"],
+                },
+            ]
+            self.draw_buttons()
+
+    def _update_rom_info_view(self):
+        if self.input.key(self.controller_layout["a"]["key"]):
+            if (
+                self.status.rom_info_ready.is_set()
+                and self.status.download_rom_ready.is_set()
+                and len(self.status.roms_to_show) > 0
+            ):
+                self.status.download_rom_ready.clear()
+                if len(self.status.multi_selected_roms) == 0:
+                    self.status.multi_selected_roms.append(
+                        self.status.roms_to_show[self.roms_selected_position]
+                    )
+                self.status.download_queue = self.status.multi_selected_roms
+                self.status.abort_download.clear()
+                threading.Thread(target=self.api.download_rom).start()
+        elif self.input.key(self.controller_layout["b"]["key"]):
+            if self.status.selected_platform:
+                self.status.current_view = View.PLATFORMS
+                self.status.selected_platform = None
+            elif self.status.selected_collection:
+                self.status.current_view = View.COLLECTIONS
+                self.status.selected_collection = None
+            elif self.status.selected_virtual_collection:
+                self.status.current_view = View.COLLECTIONS
+                self.status.selected_virtual_collection = None
+            else:
+                self.status.current_view = View.PLATFORMS
+            self.status.reset_roms_list()
+            self.roms_selected_position = 0
+            self.status.multi_selected_roms = []
+        elif self.input.key(self.controller_layout["y"]["key"]):
+            if self.status.rom_info_ready.is_set():
+                self.status.rom_info_ready.clear()
+                threading.Thread(target=self.api.fetch_rom_info).start()
+                # self.status.multi_selected_roms = []
+        elif self.input.key(self.controller_layout["x"]["key"]):
+            self.status.current_filter = next(self.status.filters)
+            self.roms_selected_position = 0
+        elif self.input.key(self.controller_layout["r1"]["key"]):
+            if len(self.status.multi_selected_roms) == len(self.status.saves_states_to_show):
+                self.status.multi_selected_roms = []
+            else:
+                self.status.multi_selected_roms = self.status.saves_states_to_show.copy()
+        elif self.input.key(self.controller_layout["l1"]["key"]):
+            if (
+                self.status.download_rom_ready.is_set()
+                and len(self.status.saves_states_to_show) > 0
+            ):
+                selected_rom = self.status.roms_to_show[self.roms_selected_position]
+                if selected_rom not in self.status.multi_selected_roms:
+                    self.status.multi_selected_roms.append(selected_rom)
+                else:
+                    self.status.multi_selected_roms.remove(selected_rom)
+        elif self.input.key("START"):
+            self.status.show_contextual_menu = not self.status.show_contextual_menu
+            if self.status.show_contextual_menu and len(self.status.roms_to_show) > 0:
+                selected_rom = self.status.roms_to_show[self.roms_selected_position]
+                self.contextual_menu_options = [
+                    (
+                        f"{glyphs.about} Rom info",
+                        0,
+                        lambda: self.ui.draw_log(
+                            text_line_1=f"Rom name: {selected_rom.name}"
+                        ),
+                    ),
+                ]
+
+                if self.fs.is_rom_in_device(selected_rom):
+                    self.contextual_menu_options.append(
+                        (
+                            f"{glyphs.delete} Remove from device",
+                            1,
+                            lambda: self._remove_rom_files(selected_rom),
+                        ),
+                    )
+                    self.contextual_menu_options.append(
+                        (
+                            f"{glyphs.delete} Show saves/states",
+                            1,
+                            lambda: self._render_rom_info(selected_rom),
+                        ),
+                    )
+            else:
+                self.contextual_menu_options = []
+        else:
+            self.roms_selected_position = self.input.handle_navigation(
+                self.roms_selected_position,
+                self.max_n_roms,
+                len(self.status.roms_to_show),
+            )

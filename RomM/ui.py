@@ -11,7 +11,7 @@ from config import (
 )
 from filesystem import Filesystem
 from glyps import glyphs
-from models import Collection, Platform, Rom
+from models import Collection, Platform, Rom, Save
 from PIL import Image, ImageDraw, ImageFont
 from status import Status
 
@@ -604,3 +604,80 @@ class UserInterface:
                 color_btn_a if UserInterface.layout_name == "nintendo" else color_btn_b
             ),
         )
+
+    def draw_rom_info_list(
+        self,
+        roms_selected_position: int,
+        max_n_roms: int,
+        saves_states: list[Save],
+        header_text: str,
+        header_color: str,
+        multi_selected_roms: list[Rom],
+        prepend_platform_slug: bool = False,
+    ):
+        self.draw_rectangle_r(
+            [10, 50, self.screen_width - 10, 100], 5, outline=color_menu_bg
+        )
+        self.draw_text(
+            (self.screen_width / 2, 62),
+            header_text,
+            color=header_color,
+            anchor="mm",
+        )
+        self.draw_rectangle_r(
+            [10, 70, self.screen_width - 10, self.screen_height - 43],
+            0,
+            fill=color_menu_bg,
+            outline=None,
+        )
+
+        # Adjust max text length to reserve space for file size and padding
+        padding = 4  # Additional padding in characters
+        max_len_text = (
+            int((self.screen_width - 71) / 11)
+            - (4 if prepend_platform_slug else 0)
+            - padding
+        )
+
+        start_idx = int(roms_selected_position / max_n_roms) * max_n_roms
+        end_idx = min(start_idx + max_n_roms, len(saves_states))
+        for i, r in enumerate(saves_states[start_idx:end_idx]):
+            is_selected = i == (roms_selected_position % max_n_roms)
+            # is_in_device = self.fs.is_rom_in_device(r)
+            is_in_device = False
+            sync_flag_text = f"{glyphs.cloud_sync}" if is_in_device else ""
+
+            # Build base row text
+            row_text = r.file_name
+            row_text += f" ({','.join(r.file_extension)})" if r.file_extension else ""
+
+            # Handle text scrolling
+            if len(row_text) > max_len_text:
+                row_text = row_text + " "
+                shift_offset = (int(time.time() * 2)) % len(row_text)
+                row_text = row_text[shift_offset:] + row_text[:shift_offset]
+
+            # Truncate base text and append file size with padding
+            # size_text = f"[{r.fs_size[0]}{r.fs_size[1]}] {sync_flag_text}"
+            size_text = f"[{r.file_size_bytes}B] {sync_flag_text}"
+            if len(row_text) > max_len_text:
+                row_text = row_text[:max_len_text]
+            row_text = f"{row_text} {size_text}"
+
+            # Add checkbox
+            row_text = f"{glyphs.checkbox_selected if r in multi_selected_roms else glyphs.checkbox} {row_text}"
+
+            self.row_list(
+                row_text,
+                (20, 80 + (i * 35)),
+                self.screen_width - 40,
+                32,
+                is_selected,
+                fill=header_color,
+                outline=header_color if r in multi_selected_roms else None,
+                append_icon_path=(
+                    f"{self.fs.resources_path}/{r.platform_slug}.ico"
+                    if prepend_platform_slug
+                    else ""
+                ),
+            )
