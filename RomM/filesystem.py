@@ -4,6 +4,8 @@ from typing import Optional
 import platform_maps
 from models import Rom, Save
 
+import re
+
 
 class Filesystem:
     _instance: Optional["Filesystem"] = None
@@ -208,6 +210,22 @@ class Filesystem:
             rom.fs_name if not rom.multi else f"{rom.fs_name}.m3u",
         )
         return os.path.exists(rom_path)
+    
+    def is_save_state_in_device(self, platform_slug, save: Save) -> bool:
+        """Check if a ROM exists in the storage path."""
+        # TODO: Implement a more robust check for save states
+        # Get real path, without the time tag
+        _fs_name = re.sub(" \[\d{4}-\d{2}-\d{2}.*?\]","",save.file_name)
+        # Compare real path file creation/modification time with the save time tag
+        save_path = os.path.join(
+            self.get_saves_states_storage_path(False, platform_slug, save.emulator),
+            _fs_name,
+        )
+        state_path = os.path.join(
+            self.get_saves_states_storage_path(True, platform_slug, save.emulator),
+            _fs_name,
+        )
+        return os.path.exists(save_path) or os.path.exists(state_path)
     
     def get_saves_states_storage_path(self, sel_state, platform: str, emulator: str) -> str:
         """Return the storage path for a specific save/state."""

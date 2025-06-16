@@ -607,12 +607,12 @@ class UserInterface:
 
     def draw_rom_info_list(
         self,
-        roms_selected_position: int,
+        saves_selected_position: int,
         max_n_roms: int,
         saves_states: list[Save],
         header_text: str,
         header_color: str,
-        multi_selected_roms: list[Rom],
+        multi_selected_saves: list[Save],
         prepend_platform_slug: bool = False,
     ):
         self.draw_rectangle_r(
@@ -639,17 +639,16 @@ class UserInterface:
             - padding
         )
 
-        start_idx = int(roms_selected_position / max_n_roms) * max_n_roms
+        start_idx = int(saves_selected_position / max_n_roms) * max_n_roms
         end_idx = min(start_idx + max_n_roms, len(saves_states))
         for i, r in enumerate(saves_states[start_idx:end_idx]):
-            is_selected = i == (roms_selected_position % max_n_roms)
-            # is_in_device = self.fs.is_rom_in_device(r)
-            is_in_device = False
+            is_selected = i == (saves_selected_position % max_n_roms)
+            is_in_device = self.fs.is_save_state_in_device(r.platform_slug, r)
             sync_flag_text = f"{glyphs.cloud_sync}" if is_in_device else ""
 
             # Build base row text
             row_text = r.file_name
-            row_text += f" ({','.join(r.file_extension)})" if r.file_extension else ""
+            # row_text += f" ({','.join(r.file_extension)})" if r.file_extension else ""
 
             # Handle text scrolling
             if len(row_text) > max_len_text:
@@ -659,13 +658,13 @@ class UserInterface:
 
             # Truncate base text and append file size with padding
             # size_text = f"[{r.fs_size[0]}{r.fs_size[1]}] {sync_flag_text}"
-            size_text = f"[{r.file_size_bytes}B] {sync_flag_text}"
+            size_text = f"[{round(r.file_size_bytes/1024,1)} KB] {sync_flag_text}"
             if len(row_text) > max_len_text:
                 row_text = row_text[:max_len_text]
             row_text = f"{row_text} {size_text}"
 
             # Add checkbox
-            row_text = f"{glyphs.checkbox_selected if r in multi_selected_roms else glyphs.checkbox} {row_text}"
+            row_text = f"{glyphs.checkbox_selected if r in multi_selected_saves else glyphs.checkbox} {row_text}"
 
             self.row_list(
                 row_text,
@@ -674,7 +673,7 @@ class UserInterface:
                 32,
                 is_selected,
                 fill=header_color,
-                outline=header_color if r in multi_selected_roms else None,
+                outline=header_color if r in multi_selected_saves else None,
                 append_icon_path=(
                     f"{self.fs.resources_path}/{r.platform_slug}.ico"
                     if prepend_platform_slug

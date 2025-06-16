@@ -114,10 +114,10 @@ class API:
         self.status.valid_host = True
         self.status.valid_credentials = True
 
-    def fetch_rom_info(self, rom_id: int) -> Rom:
+    def fetch_rom_info(self, rom: Rom):
         try:
             request = Request(
-                f"{self.host}/{self._roms_endpoint}/{rom_id}",
+                f"{self.host}/{self._roms_endpoint}/{rom.id}",
                 headers=self.headers,
             )
         except ValueError as e:
@@ -160,14 +160,14 @@ class API:
                 revision=rom["revision"],
                 tags=rom["tags"],
             )
-        _saves = self._parse_saves_states(rom["user_saves"])
-        _states = self._parse_saves_states(rom["user_states"])
+        _saves = self._parse_saves_states(rom["user_saves"], _rom, False)
+        _states = self._parse_saves_states(rom["user_states"], _rom, True)
         self.status.saves = _saves
         self.status.states = _states
         self.status.selected_rom = _rom
-        self.status.rom_info_ready.set()
+        self.status.saves_ready.set()
     
-    def _parse_saves_states(self, saves) -> None:
+    def _parse_saves_states(self, saves, rom: Rom, is_state: bool) -> list[Save]:
         _saves: list[Save] = []
 
         for save in saves:
@@ -186,7 +186,10 @@ class API:
                 "created_at": save["created_at"],
                 "updated_at": save["updated_at"], 
                 "emulator": save["emulator"],
-                "screenshot": None  # Default to None
+                "screenshot": None,  # Default to None
+                "platform_slug": rom.platform_slug,  # platform slug for the download path
+                "rom_name": os.path.splitext(os.path.basename(rom.fs_name))[0],  # name of the rom for the download path
+                "is_state": is_state,  # True if this is a save state, False if it's a save
             }
             
             if "screenshot" in save and save["screenshot"]:
@@ -620,7 +623,11 @@ class API:
         self.status.multi_selected_roms = []
         self.status.download_queue = []
         self.status.download_rom_ready.set()
-        self.status.saves_ready.set()
+        self.status.downloading_save = None
+        self.status.multi_selected_saves = []
+        # self.status.saves_ready.set()
+        self.status.download_queue_saves = []
+        self.status.download_saves_ready.set()
         self.status.abort_download.set()
 
     def download_rom(self) -> None:
@@ -771,15 +778,11 @@ class API:
     def download_save_state(self) -> None:
         self.status.download_queue_saves.sort(key=lambda save: save.file_name)
         for i, save in enumerate(self.status.download_queue_saves):
-            _rom = self.fetch_rom_info(save.rom_id)
-            if not _rom:
-                print(f"ERROR: ROM with ID {save.rom_id} not found.")
-                continue
             self.status.downloading_save = save
             self.status.downloading_save_position = i + 1
             dest_path = os.path.join(
-                self.file_system.get_saves_states_storage_path(self.status.selected_states_get, _rom.platform_slug, save.emulator),
-                self._sanitize_filename(os.path.splitext(os.path.basename(_rom.fs_name))[0]) + '.' + save.file_extension
+                self.file_system.get_saves_states_storage_path(save.is_state, save.platform_slug, save.emulator),
+                self._sanitize_filename(save.rom_name + '.' + save.file_extension)
             )
             
             url_dlpath = save.download_path.replace('\'', '')
@@ -823,6 +826,7 @@ class API:
                             self._reset_download_status(True, True)
                             os.remove(dest_path)
                             return
+                        
             except HTTPError as e:
                 if e.code == 403:
                     self._reset_download_status(valid_host=True)

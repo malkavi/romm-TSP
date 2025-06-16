@@ -37,6 +37,9 @@ Save = namedtuple(
         "updated_at",
         "emulator",
         "screenshot",
+        "platform_slug",  # platform slug for the download path
+        "rom_name",  # name of the rom for the download path
+        "is_state",  # True if this is a save state, False if it's a save
     ])
 ScreenShot = namedtuple(
     "screenshot",
