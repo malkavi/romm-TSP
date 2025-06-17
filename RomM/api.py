@@ -4,6 +4,7 @@ import math
 import os
 import re
 import zipfile
+import datetime
 from typing import Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -810,6 +811,15 @@ class API:
                         if not self.status.abort_download.is_set():
                             chunk = response.read(chunk_size)
                             if not chunk:
+                                out_file.close()
+                                # Get time from file name
+                                _date_pattern = r"\[([0-9]{4}-[0-9]{1,2}-[0-9]{1,2} [0-9]{1,2}-[0-9]{1,2}).*\]"
+                                _date = re.findall(_date_pattern, save.file_name)
+                                # Convert to datetime object
+                                if _date:
+                                    _file_dtime = datetime.datetime.strptime(_date[0], "%Y-%m-%d %H-%M")
+                                    # Set the creation and modification datetime of the file
+                                    os.utime(dest_path, (_file_dtime.timestamp(), _file_dtime.timestamp()))
                                 print("Finalized download")
                                 break
                             out_file.write(chunk)

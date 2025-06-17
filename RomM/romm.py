@@ -661,9 +661,11 @@ class RomM:
                     2
                 ]()
                 self.status.show_contextual_menu = False
+                self.contextual_menu_selected_position = 0
         elif self.input.key(self.controller_layout["b"]["key"]):
             self.status.show_contextual_menu = False
             self.contextual_menu_options = []
+            self.contextual_menu_selected_position = 0
         else:
             self.contextual_menu_selected_position = self.input.handle_navigation(
                 self.contextual_menu_selected_position,
@@ -909,9 +911,9 @@ class RomM:
                 os.remove(rom_list_path)
         else:
             full_path = os.path.join(storage_path, rom.fs_name)
-            if os.path.commonpath(
+            if os.path.normpath(os.path.commonpath(
                 [storage_path, full_path]
-            ) == storage_path and os.path.isfile(full_path):
+            )) == os.path.normpath(storage_path) and os.path.isfile(full_path):
                 os.remove(full_path)
 
     def _render_rom_info(self, rom: Rom):
@@ -920,7 +922,7 @@ class RomM:
         self.status.selected_rom = rom
         self.status.current_view = View.ROM_INFO
         self._render_rom_info_view()
-        threading.Thread(target=self.api.fetch_rom_info(rom)).start()
+        threading.Thread(target=self.api.fetch_rom_info, args=(rom,)).start()
 
     def _render_rom_info_view(self):
         if self.status.selected_rom is None and self.status.saves_ready.is_set():
@@ -1067,7 +1069,7 @@ class RomM:
         elif self.input.key(self.controller_layout["y"]["key"]):
             if self.status.saves_ready.is_set():
                 self.status.saves_ready.clear()
-                threading.Thread(target=self.api.fetch_rom_info(self.status.selected_rom)).start()
+                threading.Thread(target=self.api.fetch_rom_info, args=(self.status.selected_rom,)).start()
         elif self.input.key(self.controller_layout["x"]["key"]):
             self.status.current_filter = next(self.status.filters)
             self.saves_selected_position = 0
@@ -1095,7 +1097,7 @@ class RomM:
                         f"{glyphs.about} Save/State info",
                         0,
                         lambda: self.ui.draw_log(
-                            text_line_1=f"Save/State name: {selected_rom.name}"
+                            text_line_1=f"Save/State name: {selected_rom.file_name}"
                         ),
                     ),
                 ]

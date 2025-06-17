@@ -2,6 +2,7 @@ import ctypes
 import os
 import shutil
 import time
+import re
 from typing import Optional
 
 import sdl2
@@ -648,6 +649,15 @@ class UserInterface:
 
             # Build base row text
             row_text = r.file_name
+            if "state" in r.file_extension.lower():
+                row_text = "State " 
+            else:
+                row_text = "Save "
+            row_text += "(" + r.file_extension + ")"
+            date_pattern = r"\[[0-9]{4}.[0-9]{1,2}.[0-9]{1,2}.*\]"
+            dates = re.findall(date_pattern, r.file_name)
+            if dates:
+                row_text += f" {dates[0]}"
             # row_text += f" ({','.join(r.file_extension)})" if r.file_extension else ""
 
             # Handle text scrolling

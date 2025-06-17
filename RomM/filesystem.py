@@ -5,6 +5,7 @@ import platform_maps
 from models import Rom, Save
 
 import re
+import time
 
 
 class Filesystem:
@@ -153,6 +154,8 @@ class Filesystem:
         if self._saves_storage_folder == 1:
             # 1: Use Core name subfolder
             saves_dir = emulator
+            if saves_dir is None:
+                saves_dir = ""
         elif self._saves_storage_folder == 2:
             # 2: Use platform name subfolder (Knulli)
             saves_dir = self._get_platform_storage_dir_from_mapping(platform)
@@ -168,6 +171,8 @@ class Filesystem:
         if self._states_storage_folder == 1:
             # 1: Use Core name subfolder
             states_dir = emulator
+            if states_dir is None:
+                states_dir = ""
         elif self._states_storage_folder == 2:
             # 2: Use platform name subfolder (Knulli)
             states_dir = self._get_platform_storage_dir_from_mapping(platform)
@@ -214,8 +219,11 @@ class Filesystem:
     def is_save_state_in_device(self, platform_slug, save: Save) -> bool:
         """Check if a ROM exists in the storage path."""
         # TODO: Implement a more robust check for save states
+        # Get server/file time from tag
+        _date_pattern = r"\[([0-9]{4}.[0-9]{1,2}.[0-9]{1,2} [0-9]{1,2}-[0-9]{1,2}).*\]"
+        _date = re.findall(_date_pattern, save.file_name)
         # Get real path, without the time tag
-        _fs_name = re.sub(" \[\d{4}-\d{2}-\d{2}.*?\]","",save.file_name)
+        _fs_name = save.rom_name + "." + save.file_extension
         # Compare real path file creation/modification time with the save time tag
         save_path = os.path.join(
             self.get_saves_states_storage_path(False, platform_slug, save.emulator),
@@ -225,7 +233,30 @@ class Filesystem:
             self.get_saves_states_storage_path(True, platform_slug, save.emulator),
             _fs_name,
         )
-        return os.path.exists(save_path) or os.path.exists(state_path)
+
+        if os.path.exists(save_path) or os.path.exists(state_path):
+            if len(_date) == 0:
+                # If no date tag, just check if the file exists
+                return os.path.exists(save_path) or os.path.exists(state_path)
+            
+            _ceate_time = 0
+            _mod_time = 0
+            if os.path.exists(save_path):
+                _ceate_time = os.path.getctime(save_path)
+                _mod_time = os.path.getmtime(save_path)
+            elif os.path.exists(state_path):
+                _ceate_time = os.path.getctime(state_path)
+                _mod_time = os.path.getmtime(state_path)
+
+            _c_ti = time.ctime(_ceate_time)
+            _m_ti = time.ctime(_mod_time)
+
+            _T_stamp_cre = time.strftime("%Y-%m-%d %H-%M", time.strptime(_c_ti))
+            _T_stamp_mod = time.strftime("%Y-%m-%d %H-%M", time.strptime(_m_ti))
+
+            return (_T_stamp_cre == _date[0]) or (_T_stamp_mod == _date[0])
+        else:
+            return False
     
     def get_saves_states_storage_path(self, sel_state, platform: str, emulator: str) -> str:
         """Return the storage path for a specific save/state."""
