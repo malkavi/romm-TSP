@@ -616,8 +616,8 @@ class RomM:
                     )
                     self.contextual_menu_options.append(
                         (
-                            f"{glyphs.delete} Show saves/states",
-                            1,
+                            f"{glyphs.cloud_sync} Show saves/states",
+                            2,
                             lambda: self._render_rom_info(selected_rom),
                         ),
                     )
@@ -1099,6 +1099,11 @@ class RomM:
                         lambda: self.ui.draw_log(
                             text_line_1=f"Save/State name: {selected_rom.file_name}"
                         ),
+                    ),
+                    (
+                        f"{glyphs.microsd} Sync Saves/States",
+                        1,
+                        lambda: self.api.upload_save_state(self.status.selected_rom, selected_rom.emulator if selected_rom else None),
                     ),
                 ]
             else:

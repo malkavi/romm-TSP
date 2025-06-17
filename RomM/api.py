@@ -9,6 +9,7 @@ from typing import Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
+import requests
 
 import platform_maps
 from filesystem import Filesystem
@@ -152,6 +153,7 @@ class API:
                 name=rom["name"],
                 fs_name=rom["fs_name"],
                 platform_slug=rom["platform_slug"],
+                fs_name_no_ext=rom["fs_name_no_ext"],
                 fs_extension=rom["fs_extension"],
                 fs_size=self._human_readable_size(rom["fs_size_bytes"]),
                 fs_size_bytes=rom["fs_size_bytes"],
@@ -596,6 +598,7 @@ class API:
                     name=rom["name"],
                     fs_name=rom["fs_name"],
                     platform_slug=rom["platform_slug"],
+                    fs_name_no_ext=rom["fs_name_no_ext"],
                     fs_extension=rom["fs_extension"],
                     fs_size=self._human_readable_size(rom["fs_size_bytes"]),
                     fs_size_bytes=rom["fs_size_bytes"],
@@ -626,7 +629,6 @@ class API:
         self.status.download_rom_ready.set()
         self.status.downloading_save = None
         self.status.multi_selected_saves = []
-        # self.status.saves_ready.set()
         self.status.download_queue_saves = []
         self.status.download_saves_ready.set()
         self.status.abort_download.set()
@@ -863,7 +865,7 @@ class API:
             return
         dest_path = os.path.join(
             self.file_system.get_saves_states_storage_path(save.is_state, save.platform_slug, save.emulator),
-            self._sanitize_filename(save.rom_name + '.' + screenshot.file_extension)
+            self._sanitize_filename(save.rom_name + '.' + save.file_extension + '.' + screenshot.file_extension)
         )
         
         url_dlpath = screenshot.download_path.replace('\'', '')
@@ -927,3 +929,100 @@ class API:
             self._reset_download_status(valid_host=True)
             return
         # End of download
+
+    def upload_save_state(self, rom: Rom, emulator: str) -> None:
+        '''
+        Uploads save states for a given ROM and emulator.
+        This method checks the local saves and states directories for files
+        that match the ROM name and uploads them to the server.
+        Args:
+            rom (Rom): The ROM object containing the name and platform slug.
+            emulator (str): The emulator name to which the save states belong.
+        '''
+        # print rom name
+        _id = self.status.me['id']
+        print(f"Uploading save state for {rom.name} / id: {_id}...")
+
+        _saves_path = self.file_system.get_saves_states_storage_path(
+            False,
+            platform=rom.platform_slug,
+            emulator=emulator
+        )
+        _states_path = self.file_system.get_saves_states_storage_path(
+            True,
+            platform=rom.platform_slug,
+            emulator=emulator
+        )
+        # Get a list of all files in the saves path starting with the rom name
+        states_files = [
+            os.path.normpath(os.path.join(_states_path, f)) for f in os.listdir(_states_path)
+            if f.startswith(rom.fs_name_no_ext) and not f.endswith('.png')
+        ]
+        saves_files = [
+            os.path.normpath(os.path.join(_saves_path, f)) for f in os.listdir(_saves_path)
+            if f.startswith(rom.fs_name_no_ext) and not f.endswith('.png')
+        ]
+        files = saves_files + states_files
+        if not files:
+            print("No save states found to upload.")
+            return
+        
+        if not self.status.saves_ready.is_set():
+            print("Error: Saves not ready...")
+            return
+        # compare the files in the saves path with the ones in self.status.saves and self.status.states
+        _saves_states = self.status.saves + self.status.states
+        for _file in files:
+            if not _saves_states:
+                print("No saves or states found to compare.")
+                continue
+            # get _file atime and mtime
+            mtime = os.path.getmtime(_file)
+            # check if saves/states list contains atime/mtime string
+            mtime_str = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H-%M")
+            if any(
+                mtime_str in state.file_name and
+                state.file_extension == _file.split('.')[-1]
+                for state in _saves_states
+            ):
+                print(f"State {os.path.basename(_file)} already exists, skipping upload.")
+                continue
+            print(f"Uploading state {os.path.basename(_file)}...")
+            endpoint = self._saves_endpoint
+            save_state_post = "saveFile"
+            if ".state" in _file:
+                endpoint = self._states_endpoint
+                save_state_post = "stateFile"
+
+            url = f"{self.host}/{endpoint}?rom_id={rom.id}"
+            if emulator:
+                url += f"&emulator={emulator}"
+
+            # with open(_file, 'rb') as file:
+            # post_files = {save_state_post: file}
+            _file_name_tag = os.path.splitext(os.path.basename(_file))[0]
+            _file_name_tag = _file_name_tag + " [" + mtime_str + "-00-000]"
+            _file_name_tag = _file_name_tag + os.path.splitext(_file)[1]
+
+            post_files = {save_state_post: (_file_name_tag, open(_file, 'rb').read())}
+            if os.path.exists(_file + '.png'):
+                post_files["screenshotFile"] = (_file_name_tag + ".png", open(_file + '.png', 'rb').read())
+
+            # rom: DetailedRom;
+            # statesToUpload: {
+            #     stateFile: File;
+            #     screenshotFile?: File;
+            #   }[];
+            # emulator?: string;
+            # jdata = {}
+            # jdata['id'] = rom.id
+            # json_data = json.dumps(jdata)
+            try:
+                response = requests.post(url, files=post_files, headers=self.headers, timeout=60)
+            except requests.RequestException:
+                self.status.saves = []
+                self.status.valid_host = False
+                self.status.valid_credentials = False
+                print("Error uploading save state.")
+                return
+            print(response.text)

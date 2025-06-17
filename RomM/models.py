@@ -7,6 +7,7 @@ Rom = namedtuple(
         "name",
         "fs_name",
         "platform_slug",
+        "fs_name_no_ext",
         "fs_extension",
         "fs_size",
         "fs_size_bytes",
