@@ -818,9 +818,12 @@ class API:
                                 # Convert to datetime object
                                 if _date:
                                     _file_dtime = datetime.datetime.strptime(_date[0], "%Y-%m-%d %H-%M")
-                                    # Set the creation and modification datetime of the file
+                                    # Set the access and modification datetime of the file
                                     os.utime(dest_path, (_file_dtime.timestamp(), _file_dtime.timestamp()))
                                 print("Finalized download")
+                                if save.screenshot:
+                                    print("Downloading screenshot...")
+                                    self.download_screenshot(save)
                                 break
                             out_file.write(chunk)
                             self.status.valid_host = True
@@ -848,3 +851,79 @@ class API:
                 return
         # End of download
         self._reset_download_status(valid_host=True, valid_credentials=True)
+
+    def download_screenshot(self, save: Save) -> None:
+        # self.status.download_queue_screenshots.sort(key=lambda screenshot: screenshot.file_name)
+        # for i, screenshot in enumerate(self.status.download_queue_screenshots):
+        # self.status.downloading_screenshots = screenshot
+        # self.status.downloading_screenshots_position = i + 1
+        screenshot = save.screenshot
+        if not screenshot:
+            print("No screenshot to download.")
+            return
+        dest_path = os.path.join(
+            self.file_system.get_saves_states_storage_path(save.is_state, save.platform_slug, save.emulator),
+            self._sanitize_filename(save.rom_name + '.' + screenshot.file_extension)
+        )
+        
+        url_dlpath = screenshot.download_path.replace('\'', '')
+        url = f"{self.host}{quote(url_dlpath, safe='/?=[]:')}"
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+
+        try:
+            print(f"Fetching: {url}")
+            request = Request(url, headers=self.headers)
+        except ValueError:
+            self._reset_download_status()
+            return
+        try:
+            if request.type not in ("http", "https"):
+                self._reset_download_status()
+                return
+            print(f"Downloading {screenshot.file_name} to {dest_path}")
+            with (
+                urlopen(request) as response,  # trunk-ignore(bandit/B310)
+                open(dest_path, "wb") as out_file,
+            ):
+                self.status.total_downloaded_bytes = 0
+                chunk_size = 1024
+                while True:
+                    if not self.status.abort_download.is_set():
+                        chunk = response.read(chunk_size)
+                        if not chunk:
+                            out_file.close()
+                            # Get time from file name
+                            _date_pattern = r"\[([0-9]{4}-[0-9]{1,2}-[0-9]{1,2} [0-9]{1,2}-[0-9]{1,2}).*\]"
+                            _date = re.findall(_date_pattern, save.file_name)
+                            # Convert to datetime object
+                            if _date:
+                                _file_dtime = datetime.datetime.strptime(_date[0], "%Y-%m-%d %H-%M")
+                                # Set the access and modification datetime of the file
+                                os.utime(dest_path, (_file_dtime.timestamp(), _file_dtime.timestamp()))
+                            print("Finalized download")
+                            break
+                        out_file.write(chunk)
+                        self.status.valid_host = True
+                        self.status.valid_credentials = True
+                        self.status.total_downloaded_bytes += len(chunk)
+                        self.status.downloaded_percent = (
+                            self.status.total_downloaded_bytes
+                            / (
+                                self.status.downloading_save.file_size_bytes + 1
+                            )  # Add 1 virtual byte to avoid division by zero
+                        ) * 100
+                    else:
+                        self._reset_download_status(True, True)
+                        os.remove(dest_path)
+                        return
+                    
+        except HTTPError as e:
+            if e.code == 403:
+                self._reset_download_status(valid_host=True)
+                return
+            else:
+                raise
+        except URLError:
+            self._reset_download_status(valid_host=True)
+            return
+        # End of download

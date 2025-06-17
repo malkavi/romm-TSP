@@ -239,13 +239,14 @@ class Filesystem:
                 # If no date tag, just check if the file exists
                 return os.path.exists(save_path) or os.path.exists(state_path)
             
-            _ceate_time = 0
-            _mod_time = 0
+            _ceate_time = 0.0
+            _mod_time = 0.0
+            # Get the file access and modification time
             if os.path.exists(save_path):
-                _ceate_time = os.path.getctime(save_path)
+                _ceate_time = os.path.getatime(save_path)
                 _mod_time = os.path.getmtime(save_path)
             elif os.path.exists(state_path):
-                _ceate_time = os.path.getctime(state_path)
+                _ceate_time = os.path.getatime(state_path)
                 _mod_time = os.path.getmtime(state_path)
 
             _c_ti = time.ctime(_ceate_time)
