@@ -7,15 +7,15 @@ import zipfile
 import datetime
 from typing import Tuple
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
-import requests
 
 import platform_maps
 from filesystem import Filesystem
 from models import Collection, Platform, Rom, Save, ScreenShot
 from PIL import Image
 from status import Status, View
+from multipartform import MultiPartForm
 
 
 class API:
@@ -998,31 +998,54 @@ class API:
             if emulator:
                 url += f"&emulator={emulator}"
 
-            # with open(_file, 'rb') as file:
-            # post_files = {save_state_post: file}
+            # Prepare the file name with the timestamp
             _file_name_tag = os.path.splitext(os.path.basename(_file))[0]
             _file_name_tag = _file_name_tag + " [" + mtime_str + "-00-000]"
             _file_name_tag = _file_name_tag + os.path.splitext(_file)[1]
 
-            post_files = {save_state_post: (_file_name_tag, open(_file, 'rb').read())}
+            # Create the form with simple fields
+            form = MultiPartForm()
+            # Add file
+            form.add_file(
+                save_state_post, _file_name_tag,
+                fileHandle=open(_file, 'rb'))
             if os.path.exists(_file + '.png'):
-                post_files["screenshotFile"] = (_file_name_tag + ".png", open(_file + '.png', 'rb').read())
-
-            # rom: DetailedRom;
-            # statesToUpload: {
-            #     stateFile: File;
-            #     screenshotFile?: File;
-            #   }[];
-            # emulator?: string;
-            # jdata = {}
-            # jdata['id'] = rom.id
-            # json_data = json.dumps(jdata)
+                form.add_file(
+                    "screenshotFile", _file_name_tag + ".png",
+                    fileHandle=open(_file + '.png', 'rb'))
+            data = bytes(form)
             try:
-                response = requests.post(url, files=post_files, headers=self.headers, timeout=60)
-            except requests.RequestException:
-                self.status.saves = []
+                request = Request(
+                                url,
+                                headers=self.headers,
+                                data=data,)
+            except ValueError as e:
+                print(e)
                 self.status.valid_host = False
                 self.status.valid_credentials = False
-                print("Error uploading save state.")
                 return
-            print(response.text)
+            
+            request.add_header('Content-type', form.get_content_type())
+            request.add_header('Content-length', str(len(data)))
+            
+            try:
+                if request.type not in ("http", "https"):
+                    self.status.valid_host = False
+                    self.status.valid_credentials = False
+                    return
+                response = urlopen(request, timeout=60)  # trunk-ignore(bandit/B310)
+            except HTTPError as e:
+                print(e)
+                if e.code == 403:
+                    self.status.valid_host = True
+                    self.status.valid_credentials = False
+                    return
+                else:
+                    raise
+            except URLError as e:
+                print(e)
+                self.status.valid_host = False
+                self.status.valid_credentials = False
+                return
+            print(f"Uploaded {os.path.basename(_file)} successfully. Server name: {_file_name_tag}")
+
