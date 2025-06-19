@@ -614,13 +614,15 @@ class RomM:
                             lambda: self._remove_rom_files(selected_rom),
                         ),
                     )
-                    self.contextual_menu_options.append(
-                        (
-                            f"{glyphs.cloud_sync} Show saves/states",
-                            2,
-                            lambda: self._render_rom_info(selected_rom),
-                        ),
-                    )
+                    if ((self.fs.get_saves_states_storage_path(False, selected_rom.platform_slug, "") is not None) and
+                            (self.fs.get_saves_states_storage_path(True, selected_rom.platform_slug, "") is not None)):
+                        self.contextual_menu_options.append(
+                            (
+                                f"{glyphs.cloud_sync} Show saves/states",
+                                2,
+                                lambda: self._render_rom_info(selected_rom),
+                            ),
+                        )
             else:
                 self.contextual_menu_options = []
         else:

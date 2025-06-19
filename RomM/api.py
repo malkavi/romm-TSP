@@ -1011,7 +1011,7 @@ class API:
                 fileHandle=open(_file, 'rb'))
             if os.path.exists(_file + '.png'):
                 form.add_file(
-                    "screenshotFile", _file_name_tag + ".png",
+                    "screenshotFile", os.path.splitext(_file_name_tag)[0] + ".png",
                     fileHandle=open(_file + '.png', 'rb'))
             data = bytes(form)
             try:

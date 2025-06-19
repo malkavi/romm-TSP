@@ -162,6 +162,8 @@ class Filesystem:
         elif self._saves_storage_folder == 3:
             # 3: Use content path (with the rom, ignore saves path)
             saves_path = self._sd1_roms_storage_path
+        if saves_path is None:
+            return None
         return os.path.join(saves_path, saves_dir)
     
     def _get_states_storage_path(self, platform: str, emulator: str) -> str:
@@ -179,6 +181,8 @@ class Filesystem:
         elif self._states_storage_folder == 3:
             # 3: Use content path (with the rom, ignore states path)
             states_path = self._sd1_roms_storage_path
+        if states_path is None:
+            return None
         return os.path.join(states_path, states_dir)
 
     ###
