@@ -1116,7 +1116,11 @@ class RomM:
                     ),
                 ]
             else:
-                self.contextual_menu_options = []
+                self.contextual_menu_options = [(
+                        f"{glyphs.microsd} Sync Saves/States",
+                        0,
+                        lambda: threading.Thread(target=self.api.upload_save_state, args=(self.status.selected_rom, selected_rom.emulator if selected_rom else None,)).start(),
+                    ),]
         else:
             self.saves_selected_position = self.input.handle_navigation(
                 self.saves_selected_position,
