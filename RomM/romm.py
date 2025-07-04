@@ -978,6 +978,12 @@ class RomM:
                     text_line_2=f"({self.status.downloading_save.file_name})",
                     background=False,
                 )
+        elif not self.status.save_upload_ready.is_set():
+            current_time = time.time()
+            if current_time - self.last_spinner_update >= self.spinner_speed:
+                self.last_spinner_update = current_time
+                self.current_spinner_status = next(glyphs.spinner)
+            self.ui.draw_log(text_line_1=f"{self.current_spinner_status} Uploading saves/states")
         elif not self.status.valid_host:
             self.ui.draw_log(
                 text_line_1=f"Error: Can't connect to host {self.api.host}",
@@ -1105,7 +1111,8 @@ class RomM:
                     (
                         f"{glyphs.microsd} Sync Saves/States",
                         1,
-                        lambda: self.api.upload_save_state(self.status.selected_rom, selected_rom.emulator if selected_rom else None),
+                        lambda: threading.Thread(target=self.api.upload_save_state, args=(self.status.selected_rom, selected_rom.emulator if selected_rom else None,)).start(),
+                        # self.api.upload_save_state(self.status.selected_rom, selected_rom.emulator if selected_rom else None),
                     ),
                 ]
             else:

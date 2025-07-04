@@ -62,6 +62,7 @@ class Status:
         self.download_rom_ready = threading.Event()
         self.download_saves_ready = threading.Event()
         self.saves_ready = threading.Event()
+        self.save_upload_ready = threading.Event()
         self.abort_download = threading.Event()
         self.me_ready = threading.Event()
         self.updating = threading.Event()
@@ -82,6 +83,7 @@ class Status:
 
         # Saves variables
         self.saves_ready.set()
+        self.save_upload_ready.set()
         self.download_saves_ready.set()
         self.multi_selected_saves: list[Save] = []
 

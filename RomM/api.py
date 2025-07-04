@@ -710,6 +710,16 @@ class API:
                                         self.status.extracted_percent = (
                                             extracted_size / total_size
                                         ) * 100
+                                if file.filename.endswith(".m3u"):
+                                    # Remove some files from m3u file
+                                    # sbi files are psx files for encrypted games
+                                    ignored_extensions = ['.sbi']
+                                    with open(file_path, "r") as m3u_file:
+                                        lines = m3u_file.readlines()
+                                    with open(file_path, "w") as m3u_file:
+                                        for line in lines:
+                                            if not any(ext in line.lower() for ext in ignored_extensions):
+                                                m3u_file.write(line)
                             else:
                                 self._reset_download_status(True, True)
                                 os.remove(dest_path)
@@ -940,6 +950,7 @@ class API:
             emulator (str): The emulator name to which the save states belong.
         '''
         # print rom name
+        self.status.save_upload_ready.clear()
         _id = self.status.me['id']
         print(f"Uploading save state for {rom.name} / id: {_id}...")
 
@@ -965,10 +976,12 @@ class API:
         files = saves_files + states_files
         if not files:
             print("No save states found to upload.")
+            self.status.save_upload_ready.set()
             return
         
         if not self.status.saves_ready.is_set():
             print("Error: Saves not ready...")
+            self.status.save_upload_ready.set()
             return
         # compare the files in the saves path with the ones in self.status.saves and self.status.states
         _saves_states = self.status.saves + self.status.states
@@ -1023,7 +1036,7 @@ class API:
                 print(e)
                 self.status.valid_host = False
                 self.status.valid_credentials = False
-                return
+                break
             
             request.add_header('Content-type', form.get_content_type())
             request.add_header('Content-length', str(len(data)))
@@ -1032,20 +1045,22 @@ class API:
                 if request.type not in ("http", "https"):
                     self.status.valid_host = False
                     self.status.valid_credentials = False
-                    return
+                    break
                 response = urlopen(request, timeout=60)  # trunk-ignore(bandit/B310)
             except HTTPError as e:
                 print(e)
                 if e.code == 403:
                     self.status.valid_host = True
                     self.status.valid_credentials = False
-                    return
+                    break
                 else:
+                    self.status.save_upload_ready.set()
                     raise
             except URLError as e:
                 print(e)
                 self.status.valid_host = False
                 self.status.valid_credentials = False
-                return
+                break
             print(f"Uploaded {os.path.basename(_file)} successfully. Server name: {_file_name_tag}")
+        self.status.save_upload_ready.set()
 
