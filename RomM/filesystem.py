@@ -269,14 +269,9 @@ class Filesystem:
         if (platform_maps._env_emu_maps
             and platform in platform_maps._env_emu_platforms):
             # Custom emulator mapping from the .env file
-            if emulator in platform_maps._env_emu_maps.values():
-                # A custom map from the .env was found, no need to check defaults
-                print(f"Using emulator folder: {emulator}")
-            else:
-                _emulator = platform_maps._env_emu_maps.get(
-                    platform.lower(), None
-                )
-                print(f"Using emulator mapping: {platform}/{emulator} -> {_emulator}")
+            _emulator = platform_maps._env_emu_maps.get(
+                platform.lower(), None
+            )
 
         if sel_state:
             # Save state path

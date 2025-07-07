@@ -958,14 +958,9 @@ class API:
         if (platform_maps._env_emu_maps
             and rom.platform_slug in platform_maps._env_emu_platforms):
             # Custom emulator mapping from the .env file
-            if emulator in platform_maps._env_emu_maps.values():
-                # A custom map from the .env was found, no need to check defaults
-                print(f"Using custom emulator mapping: {emulator}")
-            else:
-                _emulator = platform_maps._env_emu_maps.get(
-                    rom.platform_slug.lower(), None
-                )
-                print(f"Using emulator mapping: {rom.platform_slug}/{emulator} -> {_emulator}")
+            _emulator = platform_maps._env_emu_maps.get(
+                rom.platform_slug.lower(), None
+            )
 
         _saves_path = self.file_system.get_saves_states_storage_path(
             False,

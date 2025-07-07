@@ -792,7 +792,7 @@ class RomM:
                     self.input.check_event(event)
                     if event.type == sdl2.SDL_QUIT:
                         self.running = False
-            sdl2.SDL_Delay(1)
+            sdl2.SDL_Delay(16)
 
     def start(self):
         self._render_platforms_view()
