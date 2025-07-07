@@ -952,27 +952,44 @@ class API:
         # print rom name
         self.status.save_upload_ready.clear()
         _id = self.status.me['id']
+        _emulator = emulator
         print(f"Uploading save state for {rom.name} / id: {_id}...")
+
+        if (platform_maps._env_emu_maps
+            and rom.platform_slug in platform_maps._env_emu_platforms):
+            # Custom emulator mapping from the .env file
+            if emulator in platform_maps._env_emu_maps.values():
+                # A custom map from the .env was found, no need to check defaults
+                print(f"Using custom emulator mapping: {emulator}")
+            else:
+                _emulator = platform_maps._env_emu_maps.get(
+                    rom.platform_slug.lower(), None
+                )
+                print(f"Using emulator mapping: {rom.platform_slug}/{emulator} -> {_emulator}")
 
         _saves_path = self.file_system.get_saves_states_storage_path(
             False,
             platform=rom.platform_slug,
-            emulator=emulator
+            emulator=_emulator
         )
         _states_path = self.file_system.get_saves_states_storage_path(
             True,
             platform=rom.platform_slug,
-            emulator=emulator
+            emulator=_emulator
         )
         # Get a list of all files in the saves path starting with the rom name
-        states_files = [
-            os.path.normpath(os.path.join(_states_path, f)) for f in os.listdir(_states_path)
-            if f.startswith(rom.fs_name_no_ext) and not f.endswith('.png')
-        ]
-        saves_files = [
-            os.path.normpath(os.path.join(_saves_path, f)) for f in os.listdir(_saves_path)
-            if f.startswith(rom.fs_name_no_ext) and not f.endswith('.png')
-        ]
+        states_files = []
+        saves_files = []
+        if os.path.exists(_states_path):
+            states_files = [
+                os.path.normpath(os.path.join(_states_path, f)) for f in os.listdir(_states_path)
+                if f.startswith(rom.fs_name_no_ext) and not f.endswith('.png')
+            ]
+        if os.path.exists(_saves_path):
+            saves_files = [
+                os.path.normpath(os.path.join(_saves_path, f)) for f in os.listdir(_saves_path)
+                if f.startswith(rom.fs_name_no_ext) and not f.endswith('.png')
+            ]
         files = saves_files + states_files
         if not files:
             print("No save states found to upload.")
@@ -988,18 +1005,18 @@ class API:
         for _file in files:
             if not _saves_states:
                 print("No saves or states found to compare.")
-                continue
             # get _file atime and mtime
             mtime = os.path.getmtime(_file)
             # check if saves/states list contains atime/mtime string
             mtime_str = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H-%M")
-            if any(
-                mtime_str in state.file_name and
-                state.file_extension == _file.split('.')[-1]
-                for state in _saves_states
-            ):
-                print(f"State {os.path.basename(_file)} already exists, skipping upload.")
-                continue
+            if _saves_states:
+                if any(
+                    mtime_str in state.file_name and
+                    state.file_extension == _file.split('.')[-1]
+                    for state in _saves_states
+                ):
+                    print(f"State {os.path.basename(_file)} already exists, skipping upload.")
+                    continue
             print(f"Uploading state {os.path.basename(_file)}...")
             endpoint = self._saves_endpoint
             save_state_post = "saveFile"
@@ -1008,8 +1025,8 @@ class API:
                 save_state_post = "stateFile"
 
             url = f"{self.host}/{endpoint}?rom_id={rom.id}"
-            if emulator:
-                url += f"&emulator={emulator}"
+            if _emulator:
+                url += f"&emulator={_emulator}"
 
             # Prepare the file name with the timestamp
             _file_name_tag = os.path.splitext(os.path.basename(_file))[0]

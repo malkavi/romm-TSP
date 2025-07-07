@@ -265,8 +265,21 @@ class Filesystem:
     
     def get_saves_states_storage_path(self, sel_state, platform: str, emulator: str) -> str:
         """Return the storage path for a specific save/state."""
+        _emulator = emulator
+        if (platform_maps._env_emu_maps
+            and platform in platform_maps._env_emu_platforms):
+            # Custom emulator mapping from the .env file
+            if emulator in platform_maps._env_emu_maps.values():
+                # A custom map from the .env was found, no need to check defaults
+                print(f"Using emulator folder: {emulator}")
+            else:
+                _emulator = platform_maps._env_emu_maps.get(
+                    platform.lower(), None
+                )
+                print(f"Using emulator mapping: {platform}/{emulator} -> {_emulator}")
+
         if sel_state:
             # Save state path
-            return self._get_states_storage_path(platform, emulator)
+            return self._get_states_storage_path(platform, _emulator)
         # Save path
-        return self._get_saves_storage_path(platform, emulator)
+        return self._get_saves_storage_path(platform, _emulator)

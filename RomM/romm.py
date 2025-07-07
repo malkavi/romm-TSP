@@ -787,10 +787,11 @@ class RomM:
     def _monitor_input(self):
         while self.running:
             events = sdl2.ext.get_events()
-            for event in events:
-                self.input.check_event(event)
-                if event.type == sdl2.SDL_QUIT:
-                    self.running = False
+            if events:
+                for event in events:
+                    self.input.check_event(event)
+                    if event.type == sdl2.SDL_QUIT:
+                        self.running = False
             sdl2.SDL_Delay(1)
 
     def start(self):
@@ -1112,7 +1113,6 @@ class RomM:
                         f"{glyphs.microsd} Sync Saves/States",
                         1,
                         lambda: threading.Thread(target=self.api.upload_save_state, args=(self.status.selected_rom, selected_rom.emulator if selected_rom else None,)).start(),
-                        # self.api.upload_save_state(self.status.selected_rom, selected_rom.emulator if selected_rom else None),
                     ),
                 ]
             else:

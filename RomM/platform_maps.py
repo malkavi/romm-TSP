@@ -299,6 +299,8 @@ TRIMUI_STOCK_SUPPORTED_PLATFORMS_FS = frozenset(
 
 _env_maps = None
 _env_platforms = None
+_env_emu_maps = None
+_env_emu_platforms = None
 
 
 def _load_env_maps() -> dict[str, str]:
@@ -314,12 +316,33 @@ def _load_env_maps() -> dict[str, str]:
     except Exception as e:
         print(f"Error: Unexpected error: {e}")
         return {}
+    
+
+def _load_env_emu_maps() -> dict[str, str]:
+    raw = os.getenv("CUSTOM_EMU_MAPS")
+    if not raw:
+        return {}
+    try:
+        loaded = json.loads(raw)
+        return loaded
+    except json.JSONDecodeError as e:
+        print(f"Error: CUSTOM_EMU_MAPS is an invalid JSON format: {e}")
+        return {}
+    except Exception as e:
+        print(f"Error: Unexpected error: {e}")
+        return {}
 
 
 def init_env_maps():
     global _env_maps
     global _env_platforms
+    global _env_emu_maps
+    global _env_emu_platforms
     if _env_maps is None:
         _env_maps = _load_env_maps()
     if _env_platforms is None:
         _env_platforms = frozenset(_env_maps.keys())
+    if _env_emu_maps is None:
+        _env_emu_maps = _load_env_emu_maps()
+    if _env_emu_platforms is None:
+        _env_emu_platforms = frozenset(_env_emu_maps.keys())
