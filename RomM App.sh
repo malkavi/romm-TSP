@@ -55,6 +55,7 @@ use_runtime() {
 	${python} -m pip install -U pysdl2
 	${python} -m pip install -U dotenv
 	${python} -m pip install -U semver
+	${python} -m pip install -U pillow
 }
 
 # Default to system python3
