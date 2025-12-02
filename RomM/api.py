@@ -33,7 +33,7 @@ class API:
         self.status = Status()
         self.file_system = Filesystem()
 
-        self.host = os.getenv("HOST", "")
+        self.host = os.getenv("HOST", "").strip("/")
         self.username = os.getenv("USERNAME", "")
         self.password = os.getenv("PASSWORD", "")
         self.headers = {}
