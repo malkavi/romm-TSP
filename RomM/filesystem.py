@@ -25,7 +25,7 @@ class Filesystem:
     _sd2_roms_storage_path: str | None = None
     _sd1_catalogue_path: str | None = None
     _sd2_catalogue_path: str | None = None
-    
+
     # Storage paths for SAVEs
     _saves_storage_path: str | None
 
@@ -49,34 +49,42 @@ class Filesystem:
         sd2_root_path = None
 
         # ROMs storage path
-        if os.environ.get("ROMS_STORAGE_PATH", "") != "":
-            # if the environment variable is set, use it
-            self._sd1_roms_storage_path = os.environ["ROMS_STORAGE_PATH"]
+        if os.environ.get("ROMS_STORAGE_PATH"):
+            # Go up two levels from the script's directory (e.g., from roms/ports/romm to roms/)
+            base_path = os.path.abspath(os.path.join(os.getcwd(), "..", ".."))
+            # Default to the ROMs directory, overridable via environment variable
+            self._sd1_roms_storage_path = os.environ.get("ROMS_STORAGE_PATH", base_path)
+            # For non-MuOS/non-SpruceOS devices, use catalogue from environment or create one in the app directory
+            self._sd1_catalogue_path = os.environ.get(
+                "CATALOGUE_PATH", os.path.join(os.getcwd(), "catalogue")
+            )
+        elif self.is_muos:
+            sd1_root_path = "/mnt/mmc"
+            sd2_root_path = "/mnt/sdcard"
+            self._sd1_roms_storage_path = os.path.join(sd1_root_path, "ROMS")
+            self._sd2_roms_storage_path = os.path.join(sd2_root_path, "ROMS")
+            self._sd1_catalogue_path = os.path.join(
+                sd1_root_path, "MUOS/info/catalogue"
+            )
+            self._sd2_catalogue_path = os.path.join(
+                sd2_root_path, "MUOS/info/catalogue"
+            )
+        elif self.is_spruceos:
+            sd1_root_path = "/mnt/SDCARD"
+            self._sd1_roms_storage_path = os.path.join(sd1_root_path, "Roms")
+        elif self.is_trimui_stock:
+            sd1_root_path = "/mnt/SDCARD"
+            self._sd1_roms_storage_path = os.path.join(sd1_root_path, "Roms")
             self._sd2_roms_storage_path = None
+            self._sd1_catalogue_path = os.path.join(
+                sd1_root_path, "TrimUI/info/catalogue"
+            )
+            self._sd2_catalogue_path = None
         else:
-	        if self.is_muos:
-	            sd1_root_path = "/mnt/mmc"
-	            sd2_root_path = "/mnt/sdcard"
-	            self._sd1_roms_storage_path = os.path.join(sd1_root_path, "ROMS")
-	            self._sd2_roms_storage_path = os.path.join(sd2_root_path, "ROMS")
-	            self._sd1_catalogue_path = os.path.join(
-	                sd1_root_path, "MUOS/info/catalogue"
-	            )
-	            self._sd2_catalogue_path = os.path.join(
-	                sd2_root_path, "MUOS/info/catalogue"
-	            )
-	        elif self.is_spruceos:
-	            sd1_root_path = "/mnt/SDCARD"
-	            self._sd1_roms_storage_path = os.path.join(sd1_root_path, "Roms")
-	        elif self.is_trimui_stock:
-	        	sd1_root_path = "/mnt/SDCARD"
-                self._sd1_roms_storage_path = os.path.join(sd1_root_path, "Roms")
-                self._sd2_roms_storage_path = None    
-	        else:
-	            # Go up two levels from the script's directory (e.g., from roms/ports/romm to roms/)
-	            base_path = os.path.abspath(os.path.join(os.getcwd(), "..", ".."))
-	            # Default to the ROMs directory, overridable via environment variable
-	            self._sd1_roms_storage_path = os.environ.get("ROMS_STORAGE_PATH", base_path)
+            # Go up two levels from the script's directory (e.g., from roms/ports/romm to roms/)
+            base_path = os.path.abspath(os.path.join(os.getcwd(), "..", ".."))
+            # Default to the ROMs directory, overridable via environment variable
+            self._sd1_roms_storage_path = os.environ.get("ROMS_STORAGE_PATH", base_path)
             # For non-MuOS/non-SpruceOS devices, use catalogue from environment or create one in the app directory
             self._sd1_catalogue_path = os.environ.get(
                 "CATALOGUE_PATH", os.path.join(os.getcwd(), "catalogue")

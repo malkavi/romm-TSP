@@ -77,7 +77,7 @@ def main():
             romm.ui.draw_start()  # Render at 640x480
             romm.update()  # Draw content
             romm.ui.render_to_screen()  # Render to the screen
-            romm.input.clear_pressed()  # Clear pressed keys
+            # romm.input.clear_pressed()  # Clear pressed keys
 
             # Add a small sleep to prevent 100% CPU usage
             sdl2.SDL_Delay(16)

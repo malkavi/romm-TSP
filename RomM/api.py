@@ -155,20 +155,43 @@ class API:
             return
         
         rom = json.loads(response.read().decode("utf-8"))
+        metadatum = rom.get("metadatum", {})
         _rom = Rom(
                 id=rom["id"],
-                name=rom["name"],
-                fs_name=rom["fs_name"],
+                platform_id=rom["platform_id"],
                 platform_slug=rom["platform_slug"],
+                fs_name=rom["fs_name"],
+                fs_name_no_tags=rom["fs_name_no_tags"],
                 fs_name_no_ext=rom["fs_name_no_ext"],
                 fs_extension=rom["fs_extension"],
                 fs_size=self._human_readable_size(rom["fs_size_bytes"]),
                 fs_size_bytes=rom["fs_size_bytes"],
-                multi=rom["multi"],
-                languages=rom["languages"],
-                regions=rom["regions"],
-                revision=rom["revision"],
-                tags=rom["tags"],
+                name=rom["name"],
+                slug=rom["slug"],
+                summary=rom["summary"],
+                youtube_video_id=rom.get("youtube_video_id", None),
+                path_cover_small=rom["path_cover_small"],
+                path_cover_large=rom["path_cover_large"],
+                is_identified=rom["is_identified"],
+                revision=rom.get("revision", None),
+                regions=rom.get("regions", []),
+                languages=rom.get("languages", []),
+                tags=rom.get("tags", []),
+                crc_hash=rom.get("crc_hash", ""),
+                md5_hash=rom.get("md5_hash", ""),
+                sha1_hash=rom.get("sha1_hash", ""),
+                has_simple_single_file=rom.get("has_simple_single_file", False),
+                has_nested_single_file=rom.get("has_nested_single_file", False),
+                has_multiple_files=rom.get("has_multiple_files", False),
+                merged_screenshots=rom.get("merged_screenshots", []),
+                genres=metadatum.get("genres", []),
+                franchises=metadatum.get("franchises", []),
+                collections=metadatum.get("collections", []),
+                companies=metadatum.get("companies", []),
+                game_modes=metadatum.get("game_modes", []),
+                age_ratings=metadatum.get("age_ratings", []),
+                first_release_date=metadatum.get("first_release_date", None),
+                average_rating=metadatum.get("average_rating", None),
             )
         _saves = self._parse_saves_states(rom["user_saves"], _rom, False)
         _states = self._parse_saves_states(rom["user_states"], _rom, True)
@@ -773,9 +796,12 @@ class API:
                 return
         
             # Check if the catalogue path is set and valid
-            catalogue_path = self.file_system.get_catalogue_platform_path(
-                rom.platform_slug
-            )
+            try:
+                catalogue_path = self.file_system.get_catalogue_platform_path(
+                    rom.platform_slug
+                )
+            except ValueError:
+                catalogue_path = None
             if not catalogue_path:
                 continue
             os.makedirs(catalogue_path, exist_ok=True)
