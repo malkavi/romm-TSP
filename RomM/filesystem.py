@@ -16,14 +16,16 @@ class Filesystem:
 
     # Check is app is running on SpruceOS
     is_spruceos = os.path.exists("/mnt/SDCARD/spruce")
-    
+
     # Check is app is running on TrimUI
     is_trimui_stock = os.path.exists("/mnt/SDCARD/Roms") or (os.getenv("CFW_NAME", "") == "TrimUI")
 
     # Storage paths for ROMs
     _sd1_roms_storage_path: str
-    _sd2_roms_storage_path: str | None
-
+    _sd2_roms_storage_path: str | None = None
+    _sd1_catalogue_path: str | None = None
+    _sd2_catalogue_path: str | None = None
+    
     # Storage paths for SAVEs
     _saves_storage_path: str | None
 
@@ -43,36 +45,65 @@ class Filesystem:
         if not os.path.exists(self.resources_path):
             os.makedirs(self.resources_path, exist_ok=True)
 
+        sd1_root_path = None
+        sd2_root_path = None
+
         # ROMs storage path
         if os.environ.get("ROMS_STORAGE_PATH", "") != "":
             # if the environment variable is set, use it
             self._sd1_roms_storage_path = os.environ["ROMS_STORAGE_PATH"]
             self._sd2_roms_storage_path = None
         else:
-            if self.is_muos:
-                self._sd1_roms_storage_path = "/mnt/mmc/ROMS"
-                self._sd2_roms_storage_path = "/mnt/sdcard/ROMS"
-            elif self.is_spruceos:
-                self._sd1_roms_storage_path = "/mnt/SDCARD/Roms"
-                self._sd2_roms_storage_path = None
-            elif self.is_trimui_stock:
-                self._sd1_roms_storage_path = "/mnt/SDCARD/Roms"
+	        if self.is_muos:
+	            sd1_root_path = "/mnt/mmc"
+	            sd2_root_path = "/mnt/sdcard"
+	            self._sd1_roms_storage_path = os.path.join(sd1_root_path, "ROMS")
+	            self._sd2_roms_storage_path = os.path.join(sd2_root_path, "ROMS")
+	            self._sd1_catalogue_path = os.path.join(
+	                sd1_root_path, "MUOS/info/catalogue"
+	            )
+	            self._sd2_catalogue_path = os.path.join(
+	                sd2_root_path, "MUOS/info/catalogue"
+	            )
+	        elif self.is_spruceos:
+	            sd1_root_path = "/mnt/SDCARD"
+	            self._sd1_roms_storage_path = os.path.join(sd1_root_path, "Roms")
+	        elif self.is_trimui_stock:
+	        	sd1_root_path = "/mnt/SDCARD"
+                self._sd1_roms_storage_path = os.path.join(sd1_root_path, "Roms")
                 self._sd2_roms_storage_path = None    
-            else:
-                # Go up two levels from the script's directory (e.g., from roms/ports/romm to roms/)
-                base_path = os.path.abspath(os.path.join(os.getcwd(), "..", ".."))
-                # Default to the ROMs directory, overridable via environment variable
-                self._sd1_roms_storage_path = os.environ.get("ROMS_STORAGE_PATH", base_path)
-                self._sd2_roms_storage_path = None
+	        else:
+	            # Go up two levels from the script's directory (e.g., from roms/ports/romm to roms/)
+	            base_path = os.path.abspath(os.path.join(os.getcwd(), "..", ".."))
+	            # Default to the ROMs directory, overridable via environment variable
+	            self._sd1_roms_storage_path = os.environ.get("ROMS_STORAGE_PATH", base_path)
+            # For non-MuOS/non-SpruceOS devices, use catalogue from environment or create one in the app directory
+            self._sd1_catalogue_path = os.environ.get(
+                "CATALOGUE_PATH", os.path.join(os.getcwd(), "catalogue")
+            )
 
-        # Ensure the ROMs storage path exists
-        if self._sd2_roms_storage_path and not os.path.exists(
+        # Ensure the ROMs storage path exists on SD2 if SD2 is present
+        if (
             self._sd2_roms_storage_path
+            and sd2_root_path
+            and os.path.exists(sd2_root_path)
+            and not os.path.exists(self._sd2_roms_storage_path)
         ):
             try:
                 os.mkdir(self._sd2_roms_storage_path)
             except FileNotFoundError:
                 print("Cannot create SD2 storage path", self._sd2_roms_storage_path)
+
+        # Ensure the catalogue path exists
+        if self._sd1_catalogue_path and not os.path.exists(self._sd1_catalogue_path):
+            try:
+                os.makedirs(self._sd1_catalogue_path, exist_ok=True)
+                print(f"Created catalogue directory: {self._sd1_catalogue_path}")
+            except OSError as e:
+                print(
+                    f"Cannot create catalogue directory {self._sd1_catalogue_path}: {e}"
+                )
+                self._sd1_catalogue_path = None
 
         # Set the default SD card based on the existence of the storage path
         self._current_sd = int(
@@ -129,7 +160,7 @@ class Filesystem:
             platform_dir = platform_maps.SPRUCEOS_SUPPORTED_PLATFORMS_FS_MAP.get(
                 platform, platform_dir
             )
-        
+
         if self.is_trimui_stock:
             platform_dir = platform_maps.TRIMUI_STOCK_SUPPORTED_PLATFORMS_FS_MAP.get(
                 platform, platform_dir
@@ -149,6 +180,20 @@ class Filesystem:
             platforms_dir = self._get_platform_storage_dir_from_mapping(platform)
             return os.path.join(self._sd2_roms_storage_path, platforms_dir)
         return None
+
+    def get_sd1_catalogue_platform_path(self, platform: str) -> str:
+        if not self._sd1_catalogue_path:
+            raise ValueError("SD1 catalogue path is not set.")
+
+        platforms_dir = self._get_platform_storage_dir_from_mapping(platform)
+        return os.path.join(self._sd1_catalogue_path, platforms_dir)
+
+    def get_sd2_catalogue_platform_path(self, platform: str) -> str:
+        if not self._sd2_catalogue_path:
+            raise ValueError("SD2 catalogue path is not set.")
+
+        platforms_dir = self._get_platform_storage_dir_from_mapping(platform)
+        return os.path.join(self._sd2_catalogue_path, platforms_dir)
 
     def _get_saves_storage_path(self, platform: str, emulator: str) -> str:
         saves_dir = ""
@@ -188,6 +233,7 @@ class Filesystem:
             return None
         return os.path.join(states_path, states_dir)
 
+
     ###
     # PUBLIC METHODS
     ###
@@ -215,11 +261,18 @@ class Filesystem:
 
         return self._get_sd1_platforms_storage_path(platform)
 
+    def get_catalogue_platform_path(self, platform: str) -> str:
+        """Return the catalogue path for a specific platform."""
+        if self._current_sd == 2:
+            return self.get_sd2_catalogue_platform_path(platform)
+
+        return self.get_sd1_catalogue_platform_path(platform)
+
     def is_rom_in_device(self, rom: Rom) -> bool:
         """Check if a ROM exists in the storage path."""
         rom_path = os.path.join(
             self.get_platforms_storage_path(rom.platform_slug),
-            rom.fs_name if not rom.multi else f"{rom.fs_name}.m3u",
+            rom.fs_name if not rom.has_multiple_files else f"{rom.fs_name}.m3u",
         )
         return os.path.exists(rom_path)
     
